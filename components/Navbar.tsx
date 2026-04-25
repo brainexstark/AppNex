@@ -56,6 +56,10 @@ export default function Navbar() {
   useEffect(() => {
     if (!user) { setNotifications([]); setUnreadCount(0); return; }
 
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) return;
+
     const supabase = createClient();
 
     // Initial fetch

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import Navbar from "@/components/Navbar";
 import AppIcon from "@/components/AppIcon";
 import InstallButton from "@/components/InstallButton";
+
+export const dynamic = "force-dynamic";
 import type { App } from "@/lib/types";
 import {
   Globe, Smartphone, Package, ArrowLeft,

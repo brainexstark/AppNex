@@ -9,7 +9,7 @@ import {
   Star, Users, TrendingUp, Shield
 } from "lucide-react";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 async function getApps(): Promise<App[]> {
   try {

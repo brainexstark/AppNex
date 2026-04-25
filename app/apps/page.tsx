@@ -5,7 +5,7 @@ import type { App } from "@/lib/types";
 import { Zap, Plus } from "lucide-react";
 import Link from "next/link";
 
-export const revalidate = 0; // always fresh after redirect
+export const dynamic = "force-dynamic";
 
 async function getApps(): Promise<App[]> {
   try {
