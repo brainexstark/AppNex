@@ -1,86 +1,81 @@
-// AppNex Service Worker v1.0
-const CACHE_NAME = "appnex-v1";
-const OFFLINE_URL = "/offline";
+// AppNex Service Worker v2
+// A valid, active service worker is REQUIRED for the browser to show
+// the PWA install prompt (beforeinstallprompt event).
 
-// Assets to cache on install
-const PRECACHE_ASSETS = [
+const CACHE_NAME = "appnex-v2";
+
+const PRECACHE = [
   "/",
   "/apps",
-  "/submit",
-  "/pricing",
-  "/support",
   "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
   "/icon.svg",
 ];
 
-// ── Install ──────────────────────────────────────────────────
+// ── Install: cache core assets ────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch(() => {
-        // Silently fail on individual asset errors
-      });
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(PRECACHE.map((url) => cache.add(url)))
+    )
   );
+  // Take control immediately — don't wait for old SW to die
   self.skipWaiting();
 });
 
-// ── Activate ─────────────────────────────────────────────────
+// ── Activate: clean up old caches ────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
       )
     )
   );
+  // Claim all open clients immediately
   self.clients.claim();
 });
 
-// ── Fetch ─────────────────────────────────────────────────────
+// ── Fetch: stale-while-revalidate for pages, cache-first for assets ──
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET, cross-origin, and API requests
-  if (
-    request.method !== "GET" ||
-    url.origin !== self.location.origin ||
-    url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/_next/")
-  ) {
-    return;
-  }
+  // Only handle same-origin GET requests
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // Network-first for HTML pages (always fresh)
-  if (request.headers.get("accept")?.includes("text/html")) {
+  // Skip Next.js internals and API routes — always go to network
+  if (
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.startsWith("/api/")
+  ) return;
+
+  // For HTML navigation — network first, fall back to cache
+  if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          return response;
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          return res;
         })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/"))
-        )
+        .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
     );
     return;
   }
 
-  // Cache-first for static assets
+  // For everything else — cache first, then network
   event.respondWith(
     caches.match(request).then(
       (cached) =>
         cached ||
-        fetch(request).then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        fetch(request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
           }
-          return response;
+          return res;
         })
     )
   );

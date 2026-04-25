@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Zap, Plus, Home, Grid3X3, DollarSign, LifeBuoy,
+  Plus, Home, Grid3X3, DollarSign, LifeBuoy,
   ChevronRight, LogIn, UserPlus, LogOut, LayoutDashboard,
-  Bell, Settings, User,
+  Bell, Settings,
 } from "lucide-react";
 import { useAuth } from "@/lib/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
@@ -130,8 +130,9 @@ export default function Navbar() {
 
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg group-hover:shadow-blue-500/40 transition-all group-hover:scale-105">
-                <Zap className="h-4 w-4 text-white" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl overflow-hidden shadow-lg group-hover:shadow-blue-500/40 transition-all group-hover:scale-105">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icons/icon-96.png" alt="AppNex" className="h-8 w-8 rounded-xl" />
               </div>
               <span className="text-xl font-extrabold gradient-text tracking-tight">AppNex</span>
             </Link>
