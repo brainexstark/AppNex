@@ -4,23 +4,23 @@ import { updateSession } from "@/lib/supabase/middleware";
 /**
  * Root middleware — runs on every request.
  *
- * 1. Refreshes the Supabase session so the user stays logged in.
- * 2. Protects /dashboard and /settings — redirects to /login if no session.
- * 3. Redirects logged-in users away from /login and /signup to /dashboard.
+ * RULES:
+ * - Always refresh the Supabase session (keeps user logged in).
+ * - Only /dashboard and /settings require auth — redirect to /login if no session.
+ * - /login and /signup are ALWAYS accessible — we do NOT redirect away from them
+ *   even if a session exists. The pages themselves handle post-auth navigation.
+ *   This prevents race conditions after signup/login where the cookie hasn't
+ *   propagated to the middleware yet.
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always refresh session first
+  // Always refresh session cookies
   const { response, user } = await updateSession(request);
 
-  // Protected routes — require authentication
+  // Only protect these routes — everything else is public
   const protectedPrefixes = ["/dashboard", "/settings"];
   const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
-
-  // Auth-only routes — redirect away if already signed in
-  const authOnlyRoutes = ["/login", "/signup", "/forgot-password"];
-  const isAuthOnly = authOnlyRoutes.includes(pathname);
 
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
@@ -29,11 +29,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isAuthOnly && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
+  // NOTE: We intentionally do NOT redirect logged-in users away from /login or /signup.
+  // The client-side pages handle that after confirming the session is active.
+  // Doing it in middleware causes redirect loops due to cookie timing.
 
   return response;
 }

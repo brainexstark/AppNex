@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -26,6 +26,20 @@ export default function SignupPage() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  // If already logged in, go to homepage
+  useEffect(() => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      createClient().auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          router.replace("/");
+        } else {
+          setCheckingSession(false);
+        }
+      });
+    });
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,16 +60,23 @@ export default function SignupPage() {
     setLoading(false);
 
     if (authError) {
-      setError(authError.message);
+      // Handle "user already exists" gracefully
+      if (authError.message.toLowerCase().includes("already registered") ||
+          authError.message.toLowerCase().includes("already exists")) {
+        setError("An account with this email already exists. Try logging in instead.");
+      } else {
+        setError(authError.message);
+      }
       return;
     }
 
-    // If email confirmation is disabled in Supabase, user is immediately active
     if (data?.session) {
-      router.push("/dashboard");
+      // Email confirmation disabled — user is immediately signed in
+      // Go straight to homepage
+      router.push("/");
       router.refresh();
     } else {
-      // Email confirmation required
+      // Email confirmation required — show confirmation screen
       setDone(true);
     }
   }
@@ -70,6 +91,14 @@ export default function SignupPage() {
     }
   }
 
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen hero-bg flex items-center justify-center">
+        <span className="h-8 w-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen hero-bg flex items-center justify-center px-4 py-16">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -78,7 +107,6 @@ export default function SignupPage() {
       </div>
 
       <div className="relative w-full max-w-lg animate-slide-up">
-        {/* Logo */}
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-2 group">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg group-hover:shadow-blue-500/40 transition-all">
@@ -93,27 +121,38 @@ export default function SignupPage() {
         </div>
 
         {done ? (
+          /* ── Email confirmation screen ── */
           <div className="glass rounded-3xl p-10 text-center shadow-2xl animate-fade-in">
             <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 border border-green-500/30">
               <CheckCircle className="h-8 w-8 text-green-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Check your email!</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Almost there!</h2>
             <p className="text-sm text-gray-400 mb-2">
-              We sent a confirmation link to <span className="text-white font-medium">{email}</span>.
+              We sent a confirmation link to{" "}
+              <span className="text-white font-medium">{email}</span>.
             </p>
             <p className="text-xs text-gray-500 mb-6">
-              Click the link in the email to activate your account, then log in.
+              Click the link in the email to activate your account. You&apos;ll be
+              signed in automatically.
             </p>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105"
-            >
-              Go to login <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105"
+              >
+                Go to AppNex <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-gray-200 hover:bg-white/10 transition-all"
+              >
+                Sign in instead
+              </Link>
+            </div>
           </div>
         ) : (
+          /* ── Sign up form ── */
           <div className="glass rounded-3xl p-8 shadow-2xl">
-            {/* Perks */}
             <div className="mb-6 grid grid-cols-2 gap-2">
               {PERKS.map((p) => (
                 <div key={p} className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -123,7 +162,6 @@ export default function SignupPage() {
               ))}
             </div>
 
-            {/* GitHub OAuth */}
             <button
               onClick={handleGitHub}
               disabled={oauthLoading}
@@ -131,8 +169,7 @@ export default function SignupPage() {
             >
               {oauthLoading
                 ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                : <Code2 className="h-4 w-4" />
-              }
+                : <Code2 className="h-4 w-4" />}
               Sign up with GitHub
             </button>
 
@@ -146,11 +183,8 @@ export default function SignupPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Name */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Full name
-                </label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Full name</label>
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                   <input
@@ -158,18 +192,15 @@ export default function SignupPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Jane Smith"
-                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 transition-all"
                     autoComplete="name"
                     required
                   />
                 </div>
               </div>
 
-              {/* Email */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Email address
-                </label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Email address</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                   <input
@@ -177,18 +208,15 @@ export default function SignupPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 transition-all"
                     autoComplete="email"
                     required
                   />
                 </div>
               </div>
 
-              {/* Password */}
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Password
-                </label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                   <input
@@ -196,7 +224,7 @@ export default function SignupPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min. 8 characters"
-                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-10 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                    className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-10 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 transition-all"
                     autoComplete="new-password"
                     required
                   />
@@ -209,7 +237,6 @@ export default function SignupPage() {
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {/* Strength bar */}
                 {password && (
                   <div className="mt-2 flex gap-1">
                     {[1, 2, 3, 4].map((n) => (
@@ -217,13 +244,7 @@ export default function SignupPage() {
                         key={n}
                         className={`h-1 flex-1 rounded-full transition-all ${
                           password.length >= n * 3
-                            ? n <= 1
-                              ? "bg-red-500"
-                              : n <= 2
-                              ? "bg-yellow-500"
-                              : n <= 3
-                              ? "bg-blue-500"
-                              : "bg-green-500"
+                            ? n <= 1 ? "bg-red-500" : n <= 2 ? "bg-yellow-500" : n <= 3 ? "bg-blue-500" : "bg-green-500"
                             : "bg-white/10"
                         }`}
                       />
@@ -233,21 +254,21 @@ export default function SignupPage() {
               </div>
 
               {error && (
-                <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                <div className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
                   {error}
-                </p>
+                  {error.includes("already exists") && (
+                    <Link href="/login" className="block mt-1 text-blue-400 hover:underline font-medium">
+                      → Sign in instead
+                    </Link>
+                  )}
+                </div>
               )}
 
               <p className="text-[11px] text-gray-600">
                 By signing up you agree to our{" "}
-                <Link href="/support" className="text-blue-400 hover:underline">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link href="/support" className="text-blue-400 hover:underline">
-                  Privacy Policy
-                </Link>
-                .
+                <Link href="/support" className="text-blue-400 hover:underline">Terms of Service</Link>
+                {" "}and{" "}
+                <Link href="/support" className="text-blue-400 hover:underline">Privacy Policy</Link>.
               </p>
 
               <button
@@ -255,13 +276,9 @@ export default function SignupPage() {
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 py-3 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {loading ? (
-                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                ) : (
-                  <>
-                    Create account <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
+                {loading
+                  ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  : <>Create account <ArrowRight className="h-4 w-4" /></>}
               </button>
             </form>
           </div>
@@ -269,10 +286,7 @@ export default function SignupPage() {
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{" "}
-          <Link
-            href="/login"
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
-          >
+          <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
             Log in
           </Link>
         </p>

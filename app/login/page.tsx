@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight, Code2 } from "lucide-react";
@@ -9,7 +9,8 @@ import { signIn, signInWithGitHub } from "@/lib/db/auth";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  // Default redirect is homepage, not dashboard
+  const next = searchParams.get("next") ?? "/";
   const callbackError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -17,9 +18,23 @@ function LoginForm() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState(
     callbackError === "auth_callback_failed" ? "Authentication failed. Please try again." : ""
   );
+
+  // If already logged in, redirect away — client-side only (no middleware race)
+  useEffect(() => {
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      createClient().auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          router.replace(next === "/login" ? "/" : next);
+        } else {
+          setCheckingSession(false);
+        }
+      });
+    });
+  }, [next, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,15 +47,17 @@ function LoginForm() {
     if (authError) {
       setLoading(false);
       setError(
-        authError.message.includes("Invalid login")
+        authError.message.toLowerCase().includes("invalid login") ||
+        authError.message.toLowerCase().includes("invalid credentials")
           ? "Incorrect email or password."
           : authError.message
       );
       return;
     }
 
-    // Session is set — navigate to intended destination
-    router.push(next);
+    // Session set — go to intended page
+    const destination = !next || next === "/login" || next === "/signup" ? "/" : next;
+    router.push(destination);
     router.refresh();
   }
 
@@ -52,19 +69,25 @@ function LoginForm() {
       setOauthLoading(false);
       setError(authError.message);
     }
-    // On success, browser is redirected by Supabase OAuth flow
+  }
+
+  // Show spinner while checking existing session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen hero-bg flex items-center justify-center">
+        <span className="h-8 w-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen hero-bg flex items-center justify-center px-4 py-16">
-      {/* Orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="orb-a absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-blue-600/15 blur-[100px]" />
         <div className="orb-b absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-purple-600/15 blur-[100px]" />
       </div>
 
       <div className="relative w-full max-w-md animate-slide-up">
-        {/* Logo */}
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-2 group">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg group-hover:shadow-blue-500/40 transition-all">
@@ -76,9 +99,7 @@ function LoginForm() {
           <p className="mt-1 text-sm text-gray-400">Sign in to your AppNex account</p>
         </div>
 
-        {/* Card */}
         <div className="glass rounded-3xl p-8 shadow-2xl">
-          {/* GitHub OAuth */}
           <button
             onClick={handleGitHub}
             disabled={oauthLoading}
@@ -86,8 +107,7 @@ function LoginForm() {
           >
             {oauthLoading
               ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              : <Code2 className="h-4 w-4" />
-            }
+              : <Code2 className="h-4 w-4" />}
             Continue with GitHub
           </button>
 
@@ -101,7 +121,6 @@ function LoginForm() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">Email address</label>
               <div className="relative">
@@ -111,14 +130,13 @@ function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                  className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 transition-all"
                   autoComplete="email"
                   required
                 />
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-gray-400">Password</label>
@@ -133,7 +151,7 @@ function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-10 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                  className="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-10 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-blue-500/60 transition-all"
                   autoComplete="current-password"
                   required
                 />
@@ -148,14 +166,12 @@ function LoginForm() {
               </div>
             </div>
 
-            {/* Error */}
             {error && (
               <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
                 {error}
               </p>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -163,8 +179,7 @@ function LoginForm() {
             >
               {loading
                 ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                : <><span>Sign in</span><ArrowRight className="h-4 w-4" /></>
-              }
+                : <><span>Sign in</span><ArrowRight className="h-4 w-4" /></>}
             </button>
           </form>
         </div>
@@ -182,7 +197,11 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="min-h-screen hero-bg flex items-center justify-center">
+        <span className="h-8 w-8 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+      </div>
+    }>
       <LoginForm />
     </Suspense>
   );
