@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
-import type { AppMetadata, AppType } from "@/lib/types";
+import type { AppMetadata } from "@/lib/types";
 
 function resolveUrl(base: string, path: string): string {
   if (!path) return "";
@@ -13,58 +13,76 @@ function resolveUrl(base: string, path: string): string {
 
 function isValidUrl(url: string): boolean {
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    const p = new URL(url);
+    return p.protocol === "http:" || p.protocol === "https:";
   } catch {
     return false;
   }
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+async function fetchSafe(url: string, timeoutMs = 10000): Promise<Response | null> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; AppNex/1.0; +https://appnex.app)",
-        Accept: "text/html,application/json,*/*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Cache-Control": "no-cache",
       },
     });
     return res;
+  } catch {
+    return null;
   } finally {
     clearTimeout(id);
   }
 }
 
 async function extractPWA(baseUrl: string): Promise<AppMetadata | null> {
-  try {
-    const manifestUrl = resolveUrl(baseUrl, "/manifest.json");
-    const res = await fetchWithTimeout(manifestUrl);
-    if (!res.ok) return null;
+  // Try both /manifest.json and /manifest.webmanifest
+  const manifestPaths = ["/manifest.json", "/manifest.webmanifest", "/site.webmanifest"];
 
-    const manifest = await res.json();
-    const name: string = manifest.name || manifest.short_name || "";
-    const description: string = manifest.description || "";
-    const themeColor: string = manifest.theme_color || "";
+  for (const path of manifestPaths) {
+    try {
+      const manifestUrl = resolveUrl(baseUrl, path);
+      const res = await fetchSafe(manifestUrl, 5000);
+      if (!res || !res.ok) continue;
 
-    // Resolve icon
-    let icon = "";
-    const icons: Array<{ src: string; sizes?: string }> = manifest.icons ?? [];
-    if (icons.length > 0) {
-      // Prefer 192x192 or larger
-      const preferred =
-        icons.find((i) => i.sizes && parseInt(i.sizes) >= 192) ?? icons[0];
-      icon = resolveUrl(baseUrl, preferred.src);
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("json") && !contentType.includes("manifest") && !contentType.includes("text")) continue;
+
+      const manifest = await res.json();
+      const name: string = manifest.name || manifest.short_name || "";
+      if (!name) continue;
+
+      const description: string = manifest.description || "";
+      const themeColor: string = manifest.theme_color || "";
+
+      // Resolve best icon — prefer 192+ px
+      let icon = "";
+      const icons: Array<{ src: string; sizes?: string; purpose?: string }> = manifest.icons ?? [];
+      if (icons.length > 0) {
+        // Filter out maskable-only icons first
+        const anyIcons = icons.filter((i) => !i.purpose || i.purpose.includes("any"));
+        const pool = anyIcons.length > 0 ? anyIcons : icons;
+        // Pick largest
+        const sorted = [...pool].sort((a, b) => {
+          const sizeA = parseInt(a.sizes?.split("x")[0] ?? "0");
+          const sizeB = parseInt(b.sizes?.split("x")[0] ?? "0");
+          return sizeB - sizeA;
+        });
+        icon = resolveUrl(baseUrl, sorted[0].src);
+      }
+
+      return { name, description, icon, type: "pwa", theme_color: themeColor };
+    } catch {
+      continue;
     }
-
-    if (!name) return null;
-
-    return { name, description, icon, type: "pwa", theme_color: themeColor };
-  } catch {
-    return null;
   }
+  return null;
 }
 
 async function extractWeb(url: string): Promise<AppMetadata> {
@@ -72,50 +90,71 @@ async function extractWeb(url: string): Promise<AppMetadata> {
   let description = "";
   let icon = "";
 
-  try {
-    const res = await fetchWithTimeout(url);
-    if (res.ok) {
+  const res = await fetchSafe(url);
+
+  if (res && res.ok) {
+    try {
       const html = await res.text();
       const $ = cheerio.load(html);
 
-      // Name: og:title > title > h1
+      // Name — multiple fallbacks
       name =
-        $('meta[property="og:title"]').attr("content") ||
+        $('meta[property="og:title"]').attr("content")?.trim() ||
+        $('meta[name="twitter:title"]').attr("content")?.trim() ||
         $("title").text().trim() ||
         $("h1").first().text().trim() ||
         "";
 
-      // Description: og:description > meta description
+      // Description
       description =
-        $('meta[property="og:description"]').attr("content") ||
-        $('meta[name="description"]').attr("content") ||
+        $('meta[property="og:description"]').attr("content")?.trim() ||
+        $('meta[name="twitter:description"]').attr("content")?.trim() ||
+        $('meta[name="description"]').attr("content")?.trim() ||
         "";
 
-      // Icon: og:image > apple-touch-icon > icon link > favicon
+      // Icon — try many sources in priority order
+      const candidates: string[] = [];
+
+      // 1. og:image (best quality)
       const ogImage = $('meta[property="og:image"]').attr("content");
-      const appleTouchIcon = $('link[rel="apple-touch-icon"]').attr("href");
-      const iconLink =
-        $('link[rel="icon"]').attr("href") ||
-        $('link[rel="shortcut icon"]').attr("href");
+      if (ogImage) candidates.push(resolveUrl(url, ogImage));
 
-      if (ogImage) {
-        icon = resolveUrl(url, ogImage);
-      } else if (appleTouchIcon) {
-        icon = resolveUrl(url, appleTouchIcon);
-      } else if (iconLink) {
-        icon = resolveUrl(url, iconLink);
-      } else {
-        icon = resolveUrl(url, "/favicon.ico");
-      }
+      // 2. twitter:image
+      const twitterImage = $('meta[name="twitter:image"]').attr("content");
+      if (twitterImage) candidates.push(resolveUrl(url, twitterImage));
 
-      // Clean up name
+      // 3. apple-touch-icon (high quality, square)
+      $('link[rel="apple-touch-icon"]').each((_, el) => {
+        const href = $(el).attr("href");
+        if (href) candidates.push(resolveUrl(url, href));
+      });
+
+      // 4. icon links — prefer larger sizes
+      const iconLinks: Array<{ href: string; size: number }> = [];
+      $('link[rel="icon"], link[rel="shortcut icon"]').each((_, el) => {
+        const href = $(el).attr("href");
+        const sizes = $(el).attr("sizes") ?? "0x0";
+        const size = parseInt(sizes.split("x")[0]) || 0;
+        if (href) iconLinks.push({ href: resolveUrl(url, href), size });
+      });
+      iconLinks.sort((a, b) => b.size - a.size);
+      iconLinks.forEach((l) => candidates.push(l.href));
+
+      // 5. favicon.ico fallback
+      candidates.push(resolveUrl(url, "/favicon.ico"));
+
+      // Use first non-empty candidate
+      icon = candidates.find((c) => c && c.startsWith("http")) ?? "";
+
+      // Clean up
       name = name.replace(/\s+/g, " ").trim().slice(0, 100);
       description = description.replace(/\s+/g, " ").trim().slice(0, 300);
+    } catch {
+      // HTML parse failed — use domain as name
     }
-  } catch {
-    // Fallback to domain name
   }
 
+  // Fallback name = domain
   if (!name) {
     try {
       name = new URL(url).hostname.replace(/^www\./, "");
@@ -124,9 +163,11 @@ async function extractWeb(url: string): Promise<AppMetadata> {
     }
   }
 
+  // Fallback icon = Google favicon service (always works)
   if (!icon) {
     try {
-      icon = resolveUrl(url, "/favicon.ico");
+      const domain = new URL(url).hostname;
+      icon = `https://www.google.com/s2/favicons?domain=${domain}&sz=256`;
     } catch {
       icon = "";
     }
@@ -140,27 +181,37 @@ export async function GET(req: NextRequest) {
   const url = searchParams.get("url");
 
   if (!url || !isValidUrl(url)) {
-    return NextResponse.json(
-      { error: "Invalid or missing URL" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid or missing URL" }, { status: 400 });
   }
 
   // APK
   if (url.toLowerCase().endsWith(".apk")) {
-    const filename = url.split("/").pop()?.replace(".apk", "") ?? "Android App";
-    const data: AppMetadata = {
-      name: filename,
+    const filename = url.split("/").pop()?.replace(/\.apk$/i, "") ?? "Android App";
+    // Use Google favicon for the domain as icon
+    let icon = "";
+    try {
+      const domain = new URL(url).hostname;
+      icon = `https://www.google.com/s2/favicons?domain=${domain}&sz=256`;
+    } catch { icon = ""; }
+
+    return NextResponse.json({
+      name: filename.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       description: "Android application package",
-      icon: "",
+      icon,
       type: "apk",
-    };
-    return NextResponse.json(data);
+    } satisfies AppMetadata);
   }
 
-  // Try PWA first
+  // Try PWA manifest first
   const pwaData = await extractPWA(url);
   if (pwaData) {
+    // If PWA icon is missing, fall back to Google favicon
+    if (!pwaData.icon) {
+      try {
+        const domain = new URL(url).hostname;
+        pwaData.icon = `https://www.google.com/s2/favicons?domain=${domain}&sz=256`;
+      } catch { /* keep empty */ }
+    }
     return NextResponse.json(pwaData);
   }
 

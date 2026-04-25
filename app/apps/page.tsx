@@ -83,7 +83,7 @@ export default async function AppsPage() {
         {apps.length === 0 ? (
           <EmptyState />
         ) : (
-          <AppsGrid apps={apps} />
+          <AppsGrid initialApps={apps} />
         )}
       </main>
     </div>

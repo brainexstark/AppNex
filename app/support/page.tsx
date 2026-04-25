@@ -15,7 +15,7 @@ const DOCS = [
     bg: "bg-yellow-400/10",
     title: "Quick Start",
     desc: "Submit your first app in under 60 seconds.",
-    href: "#quickstart",
+    href: "/docs/quick-start",
   },
   {
     icon: BookOpen,
@@ -23,7 +23,7 @@ const DOCS = [
     bg: "bg-blue-400/10",
     title: "App Types Guide",
     desc: "Understand PWA, APK, and Web app differences.",
-    href: "#apptypes",
+    href: "/docs/app-types",
   },
   {
     icon: LifeBuoy,
@@ -31,7 +31,7 @@ const DOCS = [
     bg: "bg-purple-400/10",
     title: "Install Button",
     desc: "How the universal install button works.",
-    href: "#install",
+    href: "/docs/install-button",
   },
   {
     icon: MessageCircle,
@@ -39,7 +39,7 @@ const DOCS = [
     bg: "bg-green-400/10",
     title: "API Reference",
     desc: "Integrate AppNex into your own workflow.",
-    href: "#api",
+    href: "/docs/api",
   },
 ];
 
@@ -119,7 +119,7 @@ export default function SupportPage() {
           <h2 className="text-xl font-bold text-white mb-6">Documentation</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {DOCS.map(({ icon: Icon, color, bg, title, desc, href }) => (
-              <a
+              <Link
                 key={title}
                 href={href}
                 className="group flex flex-col gap-3 rounded-2xl border border-white/8 bg-[#1A1A2E] p-5 hover:border-blue-500/30 hover:bg-[#1E1E35] transition-all"
@@ -132,7 +132,7 @@ export default function SupportPage() {
                   <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-gray-600 group-hover:text-blue-400 transition-colors mt-auto" />
-              </a>
+              </Link>
             ))}
           </div>
         </section>

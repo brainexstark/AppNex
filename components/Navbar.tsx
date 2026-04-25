@@ -155,9 +155,26 @@ export default function Navbar() {
 
             {/* Desktop right */}
             <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-              {loading ? (
-                <div className="h-8 w-8 rounded-full bg-white/10 animate-pulse" />
-              ) : user ? (
+              {/* While auth is loading, show nothing — prevents flash of login buttons */}
+              {!loading && !user && (
+                <>
+                  <Link
+                    href="/login"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Log in
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Sign up
+                  </Link>
+                </>
+              )}
+              {!loading && user && (
                 <>
                   {/* Submit */}
                   <Link
@@ -205,9 +222,7 @@ export default function Navbar() {
                             notifications.map((n) => (
                               <div
                                 key={n.id}
-                                className={`px-4 py-3 border-b border-white/5 last:border-0 ${
-                                  !n.is_read ? "bg-blue-500/5" : ""
-                                }`}
+                                className={`px-4 py-3 border-b border-white/5 last:border-0 ${!n.is_read ? "bg-blue-500/5" : ""}`}
                               >
                                 <div className="flex items-start gap-2">
                                   {!n.is_read && (
@@ -215,9 +230,7 @@ export default function Navbar() {
                                   )}
                                   <div className={!n.is_read ? "" : "pl-3.5"}>
                                     <p className="text-xs font-semibold text-white">{n.title}</p>
-                                    {n.body && (
-                                      <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>
-                                    )}
+                                    {n.body && <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>}
                                     <p className="text-[10px] text-gray-600 mt-1">
                                       {new Date(n.created_at).toLocaleDateString()}
                                     </p>
@@ -248,49 +261,20 @@ export default function Navbar() {
                           <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
                         <div className="p-1.5 space-y-0.5">
-                          <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all"
-                          >
-                            <LayoutDashboard className="h-4 w-4 text-gray-400" />
-                            Dashboard
+                          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all">
+                            <LayoutDashboard className="h-4 w-4 text-gray-400" />Dashboard
                           </Link>
-                          <Link
-                            href="/settings"
-                            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all"
-                          >
-                            <Settings className="h-4 w-4 text-gray-400" />
-                            Settings
+                          <Link href="/settings" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all">
+                            <Settings className="h-4 w-4 text-gray-400" />Settings
                           </Link>
                           <div className="border-t border-white/8 my-1" />
-                          <button
-                            onClick={handleSignOut}
-                            className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all"
-                          >
-                            <LogOut className="h-4 w-4" />
-                            Sign out
+                          <button onClick={handleSignOut} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                            <LogOut className="h-4 w-4" />Sign out
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all"
-                  >
-                    <LogIn className="h-4 w-4" />
-                    Log in
-                  </Link>
-                  <Link
-                    href="/signup"
-                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    Sign up
-                  </Link>
                 </>
               )}
             </div>
@@ -367,57 +351,33 @@ export default function Navbar() {
 
             {/* Auth section */}
             <div className="p-3 space-y-2">
-              {user ? (
+              {!loading && user ? (
                 <>
-                  <Link
-                    href="/dashboard"
-                    className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
+                  <Link href="/dashboard" className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
+                    <LayoutDashboard className="h-4 w-4" />Dashboard
                   </Link>
-                  <Link
-                    href="/submit"
-                    className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white w-full"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Submit an App
+                  <Link href="/submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white w-full">
+                    <Plus className="h-4 w-4" />Submit an App
                   </Link>
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
+                  <button onClick={handleSignOut} className="w-full flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all">
+                    <LogOut className="h-4 w-4" />Sign out
                   </button>
                 </>
-              ) : (
+              ) : !loading && !user ? (
                 <>
                   <div className="flex gap-2">
-                    <Link
-                      href="/login"
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all"
-                    >
-                      <LogIn className="h-4 w-4" />
-                      Log in
+                    <Link href="/login" className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
+                      <LogIn className="h-4 w-4" />Log in
                     </Link>
-                    <Link
-                      href="/signup"
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 text-sm font-semibold text-white shadow-lg transition-all"
-                    >
-                      <UserPlus className="h-4 w-4" />
-                      Sign up
+                    <Link href="/signup" className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 text-sm font-semibold text-white shadow-lg transition-all">
+                      <UserPlus className="h-4 w-4" />Sign up
                     </Link>
                   </div>
-                  <Link
-                    href="/submit"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Submit an App
+                  <Link href="/submit" className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
+                    <Plus className="h-4 w-4" />Submit an App
                   </Link>
                 </>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

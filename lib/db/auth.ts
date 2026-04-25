@@ -1,11 +1,20 @@
 /**
- * Auth helpers — all use lazy dynamic import of the Supabase client
- * so they are safe to import in any page without triggering SSR errors.
+ * Auth helpers — lazy Supabase client, safe for SSR.
+ *
+ * emailRedirectTo uses NEXT_PUBLIC_SITE_URL so confirmation emails
+ * link to the real deployed domain, not localhost.
  */
 
 async function getClient() {
   const { createClient } = await import("@/lib/supabase/client");
   return createClient();
+}
+
+function siteOrigin(): string {
+  // In browser, use actual origin (works for both dev and prod)
+  if (typeof window !== "undefined") return window.location.origin;
+  // Server-side fallback — use env var
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://appnex.app";
 }
 
 export async function signUp(email: string, password: string, fullName: string) {
@@ -15,7 +24,7 @@ export async function signUp(email: string, password: string, fullName: string) 
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
+      emailRedirectTo: `${siteOrigin()}/auth/callback`,
     },
   });
 }
@@ -45,7 +54,7 @@ export async function getUser() {
 export async function resetPassword(email: string) {
   const supabase = await getClient();
   return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/reset-password`,
+    redirectTo: `${siteOrigin()}/auth/reset-password`,
   });
 }
 
@@ -58,8 +67,6 @@ export async function signInWithGitHub() {
   const supabase = await getClient();
   return supabase.auth.signInWithOAuth({
     provider: "github",
-    options: {
-      redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
-    },
+    options: { redirectTo: `${siteOrigin()}/auth/callback` },
   });
 }
