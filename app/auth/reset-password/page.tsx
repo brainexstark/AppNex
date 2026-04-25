@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Zap, Lock, Eye, EyeOff, CheckCircle, ArrowRight } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 function ResetForm() {
   const router = useRouter();
@@ -16,13 +15,10 @@ function ResetForm() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  // Supabase sends the token in the URL hash — exchange it for a session
+  // Exchange token for session on mount
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        // User is now in password recovery mode — form is ready
-      }
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      createClient().auth.onAuthStateChange(() => {});
     });
   }, []);
 
@@ -34,8 +30,8 @@ function ResetForm() {
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { createClient } = await import("@/lib/supabase/client");
+    const { error: updateError } = await createClient().auth.updateUser({ password });
 
     setLoading(false);
     if (updateError) {
