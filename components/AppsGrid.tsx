@@ -25,11 +25,11 @@ export default function AppsGrid({ initialApps }: AppsGridProps) {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  // Manual refresh — re-fetches from API
+  // Manual refresh — re-fetches all apps from API
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await fetch("/api/apps?limit=100");
+      const res = await fetch("/api/apps?limit=1000");
       if (res.ok) {
         const data: App[] = await res.json();
         setApps(data);

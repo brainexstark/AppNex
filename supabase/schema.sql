@@ -304,14 +304,15 @@ create policy "Published apps viewable"
 drop policy if exists "Owners view own apps" on public.apps;
 create policy "Owners view own apps"
   on public.apps for select using (auth.uid() = owner_id);
+
+-- Allow anyone to submit apps (no artificial limits — AppNex stores metadata only)
 drop policy if exists "Auth users submit apps" on public.apps;
-create policy "Auth users submit apps"
-  on public.apps for insert to authenticated
-  with check (auth.uid() = owner_id);
 drop policy if exists "Anon submit apps" on public.apps;
-create policy "Anon submit apps"
-  on public.apps for insert to anon
-  with check (owner_id is null);
+drop policy if exists "Anyone can submit apps" on public.apps;
+create policy "Anyone can submit apps"
+  on public.apps for insert
+  with check (true);
+
 drop policy if exists "Owners update apps" on public.apps;
 create policy "Owners update apps"
   on public.apps for update
