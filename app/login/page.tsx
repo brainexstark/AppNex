@@ -46,12 +46,14 @@ function LoginForm() {
 
     if (authError) {
       setLoading(false);
-      setError(
-        authError.message.toLowerCase().includes("invalid login") ||
-        authError.message.toLowerCase().includes("invalid credentials")
-          ? "Incorrect email or password."
-          : authError.message
-      );
+      const msg = authError.message.toLowerCase();
+      if (msg.includes("invalid login") || msg.includes("invalid credentials") || msg.includes("wrong password")) {
+        setError("Incorrect email or password.");
+      } else if (msg.includes("email not confirmed") || msg.includes("not confirmed")) {
+        setError("Please confirm your email first. Check your inbox for a confirmation link.");
+      } else {
+        setError(authError.message);
+      }
       return;
     }
 
