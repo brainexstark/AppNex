@@ -1,16 +1,25 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import UrlInput from "@/components/UrlInput";
 import PreviewCard from "@/components/PreviewCard";
 import type { AppMetadata } from "@/lib/types";
 import { Zap, Globe, Smartphone, Package } from "lucide-react";
+import { useAuth } from "@/lib/context/AuthContext";
 
 export default function SubmitPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [preview, setPreview] = useState<{ url: string; data: AppMetadata } | null>(null);
+
+  // Redirect to login if not authenticated (client-side backup)
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login?next=/submit");
+    }
+  }, [user, loading, router]);
 
   const handlePreview = useCallback((url: string, data: AppMetadata) => {
     setPreview({ url, data });

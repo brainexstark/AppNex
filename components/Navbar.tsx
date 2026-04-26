@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Plus, Home, Grid3X3, DollarSign, LifeBuoy,
   ChevronRight, LogIn, UserPlus, LogOut, LayoutDashboard,
-  Bell, Settings,
+  Bell, Settings, User,
 } from "lucide-react";
 import { useAuth } from "@/lib/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
@@ -29,12 +29,13 @@ export default function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const drawerRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Close drawer on outside click
+  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) setDrawerOpen(false);
@@ -45,54 +46,47 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Close on route change
   useEffect(() => {
     setDrawerOpen(false);
     setUserMenuOpen(false);
     setNotifOpen(false);
   }, [pathname]);
 
-  // Load + subscribe to notifications when user is logged in
+  // Load profile avatar + notifications
   useEffect(() => {
-    if (!user) { setNotifications([]); setUnreadCount(0); return; }
-
+    if (!user) { setNotifications([]); setUnreadCount(0); setAvatarUrl(null); return; }
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !key) return;
 
     const supabase = createClient();
 
-    // Initial fetch
-    supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20)
+    // Fetch profile for avatar
+    supabase.from("profiles").select("avatar_url, full_name").eq("id", user.id).single()
       .then(({ data }) => {
         if (data) {
-          setNotifications(data as Notification[]);
-          setUnreadCount(data.filter((n) => !n.is_read).length);
+          const d = data as { avatar_url?: string | null; full_name?: string | null };
+          if (d.avatar_url) setAvatarUrl(d.avatar_url);
         }
       });
 
-    // Realtime subscription
-    const channel = supabase
-      .channel(`notifications:${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotif = payload.new as Notification;
-          setNotifications((prev) => [newNotif, ...prev]);
-          setUnreadCount((c) => c + 1);
+    // Fetch notifications
+    supabase.from("notifications").select("*").eq("user_id", user.id)
+      .order("created_at", { ascending: false }).limit(20)
+      .then(({ data }) => {
+        if (data) {
+          setNotifications(data as Notification[]);
+          setUnreadCount(data.filter((n) => !(n as Notification).is_read).length);
         }
-      )
+      });
+
+    // Realtime notifications
+    const channel = supabase.channel(`notif:${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          setNotifications((prev) => [payload.new as Notification, ...prev]);
+          setUnreadCount((c) => c + 1);
+        })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -101,11 +95,7 @@ export default function Navbar() {
   async function handleMarkAllRead() {
     if (!user) return;
     const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("user_id", user.id)
-      .eq("is_read", false);
+    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
   }
@@ -116,11 +106,31 @@ export default function Navbar() {
     router.refresh();
   }
 
-  const userInitial = user?.user_metadata?.full_name?.[0]?.toUpperCase()
-    ?? user?.email?.[0]?.toUpperCase()
-    ?? "U";
+  // Derive display name — prefer full_name from metadata, then email prefix
+  const fullName = user?.user_metadata?.full_name as string | undefined;
+  const firstName = fullName?.split(" ")[0] || user?.email?.split("@")[0] || "User";
+  const displayName = fullName || user?.email?.split("@")[0] || "User";
+  const userInitial = displayName[0]?.toUpperCase() ?? "U";
 
-  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
+  // Avatar component
+  const AvatarEl = ({ size = 36 }: { size?: number }) => (
+    avatarUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt={displayName}
+        className="rounded-xl object-cover"
+        style={{ width: size, height: size }}
+      />
+    ) : (
+      <div
+        className="flex items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white font-bold select-none"
+        style={{ width: size, height: size, fontSize: size * 0.38 }}
+      >
+        {userInitial}
+      </div>
+    )
+  );
 
   return (
     <>
@@ -144,9 +154,7 @@ export default function Navbar() {
                   key={item.href}
                   href={item.href}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    pathname === item.href
-                      ? "text-white bg-white/10"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                    pathname === item.href ? "text-white bg-white/10" : "text-gray-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
                   {item.label}
@@ -156,43 +164,27 @@ export default function Navbar() {
 
             {/* Desktop right */}
             <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-              {/* While auth is loading, show nothing — prevents flash of login buttons */}
               {!loading && !user && (
                 <>
-                  <Link
-                    href="/login"
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all"
-                  >
-                    <LogIn className="h-4 w-4" />
-                    Log in
+                  <Link href="/login" className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all">
+                    <LogIn className="h-4 w-4" />Log in
                   </Link>
-                  <Link
-                    href="/signup"
-                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                    Sign up
+                  <Link href="/signup" className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-105 active:scale-95">
+                    <UserPlus className="h-4 w-4" />Sign up
                   </Link>
                 </>
               )}
+
               {!loading && user && (
                 <>
                   {/* Submit */}
-                  <Link
-                    href="/submit"
-                    className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white hover:bg-white/10 transition-all"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Submit
+                  <Link href="/submit" className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white hover:bg-white/10 transition-all">
+                    <Plus className="h-4 w-4" />Submit
                   </Link>
 
-                  {/* Notifications bell */}
+                  {/* Notifications */}
                   <div className="relative" ref={notifRef}>
-                    <button
-                      onClick={() => setNotifOpen((v) => !v)}
-                      className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                      aria-label="Notifications"
-                    >
+                    <button onClick={() => setNotifOpen((v) => !v)} className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all" aria-label="Notifications">
                       <Bell className="h-4 w-4 text-gray-300" />
                       {unreadCount > 0 && (
                         <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
@@ -200,66 +192,54 @@ export default function Navbar() {
                         </span>
                       )}
                     </button>
-
                     {notifOpen && (
                       <div className="absolute right-0 top-11 w-80 rounded-2xl border border-white/10 bg-[#12122A] shadow-2xl overflow-hidden animate-slide-down z-50">
                         <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
                           <span className="text-sm font-semibold text-white">Notifications</span>
-                          {unreadCount > 0 && (
-                            <button
-                              onClick={handleMarkAllRead}
-                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                            >
-                              Mark all read
-                            </button>
-                          )}
+                          {unreadCount > 0 && <button onClick={handleMarkAllRead} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">Mark all read</button>}
                         </div>
                         <div className="max-h-72 overflow-y-auto">
                           {notifications.length === 0 ? (
-                            <div className="py-8 text-center text-xs text-gray-500">
-                              No notifications yet
-                            </div>
-                          ) : (
-                            notifications.map((n) => (
-                              <div
-                                key={n.id}
-                                className={`px-4 py-3 border-b border-white/5 last:border-0 ${!n.is_read ? "bg-blue-500/5" : ""}`}
-                              >
-                                <div className="flex items-start gap-2">
-                                  {!n.is_read && (
-                                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400" />
-                                  )}
-                                  <div className={!n.is_read ? "" : "pl-3.5"}>
-                                    <p className="text-xs font-semibold text-white">{n.title}</p>
-                                    {n.body && <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>}
-                                    <p className="text-[10px] text-gray-600 mt-1">
-                                      {new Date(n.created_at).toLocaleDateString()}
-                                    </p>
-                                  </div>
+                            <div className="py-8 text-center text-xs text-gray-500">No notifications yet</div>
+                          ) : notifications.map((n) => (
+                            <div key={n.id} className={`px-4 py-3 border-b border-white/5 last:border-0 ${!n.is_read ? "bg-blue-500/5" : ""}`}>
+                              <div className="flex items-start gap-2">
+                                {!n.is_read && <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400" />}
+                                <div className={!n.is_read ? "" : "pl-3.5"}>
+                                  <p className="text-xs font-semibold text-white">{n.title}</p>
+                                  {n.body && <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>}
+                                  <p className="text-[10px] text-gray-600 mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
                                 </div>
                               </div>
-                            ))
-                          )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* User avatar menu */}
+                  {/* Profile avatar + dropdown */}
                   <div className="relative" ref={userMenuRef}>
                     <button
                       onClick={() => setUserMenuOpen((v) => !v)}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-bold text-white hover:shadow-blue-500/30 hover:shadow-md transition-all"
-                      aria-label="User menu"
+                      className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 pl-1 pr-3 py-1 hover:bg-white/10 transition-all"
+                      aria-label="Profile menu"
                     >
-                      {userInitial}
+                      <AvatarEl size={30} />
+                      <span className="text-sm font-semibold text-white max-w-[100px] truncate hidden lg:block">
+                        {firstName}
+                      </span>
                     </button>
 
                     {userMenuOpen && (
-                      <div className="absolute right-0 top-11 w-52 rounded-2xl border border-white/10 bg-[#12122A] shadow-2xl overflow-hidden animate-slide-down z-50">
-                        <div className="px-4 py-3 border-b border-white/8">
-                          <p className="text-sm font-semibold text-white truncate">{userName}</p>
-                          <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      <div className="absolute right-0 top-12 w-60 rounded-2xl border border-white/10 bg-[#12122A] shadow-2xl overflow-hidden animate-slide-down z-50">
+                        {/* Profile header */}
+                        <div className="flex items-center gap-3 px-4 py-4 border-b border-white/8 bg-gradient-to-r from-blue-500/10 to-purple-600/10">
+                          <AvatarEl size={40} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                          </div>
                         </div>
                         <div className="p-1.5 space-y-0.5">
                           <Link href="/dashboard" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all">
@@ -267,6 +247,9 @@ export default function Navbar() {
                           </Link>
                           <Link href="/settings" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all">
                             <Settings className="h-4 w-4 text-gray-400" />Settings
+                          </Link>
+                          <Link href="/submit" className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-gray-200 hover:bg-white/8 transition-all">
+                            <Plus className="h-4 w-4 text-gray-400" />Submit App
                           </Link>
                           <div className="border-t border-white/8 my-1" />
                           <button onClick={handleSignOut} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-all">
@@ -305,16 +288,17 @@ export default function Navbar() {
         <div ref={drawerRef} className="fixed inset-x-0 top-16 z-40 animate-slide-down md:hidden">
           <div className="mx-3 mt-1 rounded-2xl border border-white/8 bg-[#12122A]/95 backdrop-blur-2xl shadow-2xl overflow-hidden">
 
-            {/* User info (if logged in) */}
-            {user && (
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-sm font-bold text-white flex-shrink-0">
-                  {userInitial}
+            {/* User profile card */}
+            {!loading && user && (
+              <div className="flex items-center gap-3 px-4 py-4 border-b border-white/8 bg-gradient-to-r from-blue-500/10 to-purple-600/10">
+                <AvatarEl size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{userName}</p>
-                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                </div>
+                <Link href="/settings" onClick={() => setDrawerOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-all">
+                  <Settings className="h-4 w-4 text-gray-400" />
+                </Link>
               </div>
             )}
 
@@ -324,22 +308,14 @@ export default function Navbar() {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all group ${
-                      isActive
-                        ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/20"
-                        : "hover:bg-white/5"
-                    }`}
+                  <Link key={item.href} href={item.href}
+                    className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all group ${isActive ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/20" : "hover:bg-white/5"}`}
                   >
                     <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${isActive ? "bg-gradient-to-br from-blue-500 to-purple-600" : "bg-white/5 group-hover:bg-white/10"} transition-all`}>
                       <Icon className={`h-4 w-4 ${isActive ? "text-white" : "text-gray-400"}`} />
                     </div>
                     <div className="flex-1">
-                      <p className={`text-sm font-semibold ${isActive ? "text-white" : "text-gray-200"}`}>
-                        {item.label}
-                      </p>
+                      <p className={`text-sm font-semibold ${isActive ? "text-white" : "text-gray-200"}`}>{item.label}</p>
                       <p className="text-[11px] text-gray-500">{item.desc}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-gray-600 group-hover:text-gray-400 transition-colors" />
@@ -350,14 +326,13 @@ export default function Navbar() {
 
             <div className="mx-4 border-t border-white/5" />
 
-            {/* Auth section */}
             <div className="p-3 space-y-2">
               {!loading && user ? (
                 <>
-                  <Link href="/dashboard" className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
+                  <Link href="/dashboard" onClick={() => setDrawerOpen(false)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
                     <LayoutDashboard className="h-4 w-4" />Dashboard
                   </Link>
-                  <Link href="/submit" className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white w-full">
+                  <Link href="/submit" onClick={() => setDrawerOpen(false)} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white w-full">
                     <Plus className="h-4 w-4" />Submit an App
                   </Link>
                   <button onClick={handleSignOut} className="w-full flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-all">
@@ -374,9 +349,6 @@ export default function Navbar() {
                       <UserPlus className="h-4 w-4" />Sign up
                     </Link>
                   </div>
-                  <Link href="/submit" className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm font-medium text-gray-200 hover:bg-white/10 transition-all">
-                    <Plus className="h-4 w-4" />Submit an App
-                  </Link>
                 </>
               ) : null}
             </div>
@@ -384,13 +356,7 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Backdrop */}
-      {drawerOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden"
-          onClick={() => setDrawerOpen(false)}
-        />
-      )}
+      {drawerOpen && <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden" onClick={() => setDrawerOpen(false)} />}
     </>
   );
 }
