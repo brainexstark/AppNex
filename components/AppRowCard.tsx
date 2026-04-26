@@ -17,7 +17,6 @@ const typeConfig = {
     color: "text-blue-400",
     bg: "bg-blue-400/10",
     border: "border-blue-400/20",
-    dot: "bg-blue-400",
   },
   apk: {
     label: "APK",
@@ -25,7 +24,6 @@ const typeConfig = {
     color: "text-green-400",
     bg: "bg-green-400/10",
     border: "border-green-400/20",
-    dot: "bg-green-400",
   },
   web: {
     label: "Web",
@@ -33,7 +31,13 @@ const typeConfig = {
     color: "text-purple-400",
     bg: "bg-purple-400/10",
     border: "border-purple-400/20",
-    dot: "bg-purple-400",
+  },
+  store: {
+    label: "Native",
+    icon: Smartphone,
+    color: "text-orange-400",
+    bg: "bg-orange-400/10",
+    border: "border-orange-400/20",
   },
 };
 

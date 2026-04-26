@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Download, Smartphone, CheckCircle, Loader2 } from "lucide-react";
+import { Download, Smartphone, CheckCircle, Loader2, Store } from "lucide-react";
 import type { App } from "@/lib/types";
 
 interface InstallButtonProps {
@@ -10,12 +10,31 @@ interface InstallButtonProps {
   className?: string;
 }
 
-// Global store for deferred install prompts, keyed by app URL
 const deferredPrompts = new Map<string, BeforeInstallPromptEvent>();
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function getStoreUrl(app: App): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const isAndroid = /Android/.test(ua);
+  const isWindows = /Windows/.test(ua);
+
+  const a = app as App & {
+    store_android?: string | null;
+    store_ios?: string | null;
+    store_windows?: string | null;
+  };
+
+  if (isIOS && a.store_ios) return a.store_ios;
+  if (isAndroid && a.store_android) return a.store_android;
+  if (isWindows && a.store_windows) return a.store_windows;
+
+  // Fallback priority: Android → iOS → Windows → app URL
+  return a.store_android || a.store_ios || a.store_windows || app.url;
 }
 
 export default function InstallButton({ app, size = "md", className = "" }: InstallButtonProps) {
@@ -24,16 +43,8 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
-    // Only PWAs can have a native install prompt
     if (app.type !== "pwa") return;
-
-    // Check if we already captured a prompt for this URL
-    if (deferredPrompts.has(app.url)) {
-      setHasPrompt(true);
-      return;
-    }
-
-    // Listen for the browser's beforeinstallprompt event
+    if (deferredPrompts.has(app.url)) { setHasPrompt(true); return; }
     const handler = (e: Event) => {
       e.preventDefault();
       deferredPrompts.set(app.url, e as BeforeInstallPromptEvent);
@@ -44,14 +55,22 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
       setState("done");
       deferredPrompts.delete(app.url);
     });
-
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, [app.url, app.type]);
 
   async function handleInstall() {
     if (state === "done") return;
 
-    // ── APK: direct download, no page open ───────────────────
+    // ── Store app (TikTok, Instagram, etc.) ──────────────────
+    // Detect device and open the correct store directly
+    if (app.type === "store") {
+      const storeUrl = getStoreUrl(app);
+      // Use location.href so the store app can intercept it on mobile
+      window.location.href = storeUrl;
+      return;
+    }
+
+    // ── APK: direct download ──────────────────────────────────
     if (app.type === "apk") {
       const a = document.createElement("a");
       a.href = app.url;
@@ -65,7 +84,7 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
       return;
     }
 
-    // ── PWA with captured prompt: fire it directly ────────────
+    // ── PWA with native prompt ────────────────────────────────
     if (app.type === "pwa" && hasPrompt) {
       const deferred = deferredPrompts.get(app.url);
       if (deferred) {
@@ -75,47 +94,30 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
           const { outcome } = await deferred.userChoice;
           setState(outcome === "accepted" ? "done" : "idle");
           if (outcome === "accepted") deferredPrompts.delete(app.url);
-        } catch {
-          setState("idle");
-        }
+        } catch { setState("idle"); }
         return;
       }
     }
 
-    // ── PWA without prompt yet: load the PWA in a hidden iframe
-    //    to trigger the service worker registration, which may
-    //    cause the browser to fire beforeinstallprompt.
-    //    Then fire the prompt if it arrives within 5s.
+    // ── PWA without prompt: try iframe trick ──────────────────
     if (app.type === "pwa") {
       setState("loading");
-
-      // Create hidden iframe to load the PWA
       const iframe = document.createElement("iframe");
       iframe.src = app.url;
       iframe.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:none;";
       document.body.appendChild(iframe);
       iframeRef.current = iframe;
 
-      // Wait up to 5 seconds for the prompt to fire
-      const promptReceived = await new Promise<boolean>((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 5000);
-
-        const check = setInterval(() => {
-          if (deferredPrompts.has(app.url)) {
-            clearTimeout(timeout);
-            clearInterval(check);
-            resolve(true);
-          }
+      const got = await new Promise<boolean>((resolve) => {
+        const t = setTimeout(() => resolve(false), 5000);
+        const c = setInterval(() => {
+          if (deferredPrompts.has(app.url)) { clearTimeout(t); clearInterval(c); resolve(true); }
         }, 200);
       });
 
-      // Clean up iframe
-      if (iframeRef.current) {
-        document.body.removeChild(iframeRef.current);
-        iframeRef.current = null;
-      }
+      if (iframeRef.current) { document.body.removeChild(iframeRef.current); iframeRef.current = null; }
 
-      if (promptReceived) {
+      if (got) {
         const deferred = deferredPrompts.get(app.url);
         if (deferred) {
           setState("installing");
@@ -124,21 +126,16 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
             const { outcome } = await deferred.userChoice;
             setState(outcome === "accepted" ? "done" : "idle");
             if (outcome === "accepted") deferredPrompts.delete(app.url);
-          } catch {
-            setState("idle");
-          }
+          } catch { setState("idle"); }
           return;
         }
       }
-
-      // Prompt never fired — PWA doesn't meet installability criteria.
-      // Open it directly so the user can install from the browser's own UI.
       setState("idle");
       window.open(app.url, "_blank", "noopener,noreferrer");
       return;
     }
 
-    // ── Web app: open in new tab (browser handles Add to Home Screen) ──
+    // ── Web app ───────────────────────────────────────────────
     window.open(app.url, "_blank", "noopener,noreferrer");
   }
 
@@ -150,17 +147,19 @@ export default function InstallButton({ app, size = "md", className = "" }: Inst
   const iconSize = { sm: 13, md: 15, lg: 17 }[size];
 
   const label =
-    state === "done"      ? "Installed" :
-    state === "loading"   ? "Loading…"  :
-    state === "installing"? "Installing…":
-    app.type === "apk"    ? "Install"   :
-                            "Install";
+    state === "done"        ? "Installed"    :
+    state === "loading"     ? "Loading…"     :
+    state === "installing"  ? "Installing…"  :
+    app.type === "apk"      ? "Install"      :
+    app.type === "store"    ? "Get App"      :
+                              "Install";
 
   const Icon =
-    state === "done"       ? CheckCircle :
-    state === "loading" || state === "installing" ? Loader2 :
-    app.type === "apk"     ? Download    :
-                             Smartphone;
+    state === "done"                                    ? CheckCircle :
+    state === "loading" || state === "installing"       ? Loader2     :
+    app.type === "apk"                                  ? Download    :
+    app.type === "store"                                ? Store       :
+                                                          Smartphone;
 
   return (
     <button

@@ -1,4 +1,4 @@
-export type AppType = "pwa" | "apk" | "web";
+export type AppType = "pwa" | "apk" | "web" | "store";
 
 export interface App {
   id: string;
@@ -8,6 +8,10 @@ export interface App {
   url: string;
   icon: string;
   theme_color?: string;
+  // Store links for native apps (TikTok, Instagram, etc.)
+  store_android?: string | null;
+  store_ios?: string | null;
+  store_windows?: string | null;
   created_at: string;
 }
 
@@ -17,6 +21,9 @@ export interface AppMetadata {
   icon: string;
   type: AppType;
   theme_color?: string;
+  store_android?: string | null;
+  store_ios?: string | null;
+  store_windows?: string | null;
 }
 
 export interface ExtractResult {

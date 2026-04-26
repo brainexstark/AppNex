@@ -63,6 +63,7 @@ const typeConfig = {
   pwa: { label: "Progressive Web App", icon: Smartphone, color: "text-blue-400", bg: "bg-blue-400/10 border-blue-400/20", desc: "Installable directly from your browser" },
   apk: { label: "Android APK", icon: Package, color: "text-green-400", bg: "bg-green-400/10 border-green-400/20", desc: "Download and install on Android" },
   web: { label: "Web App", icon: Globe, color: "text-purple-400", bg: "bg-purple-400/10 border-purple-400/20", desc: "Opens in your browser" },
+  store: { label: "Native App", icon: Smartphone, color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20", desc: "Install from your device's app store" },
 };
 
 export default async function AppPage({ params }: Props) {

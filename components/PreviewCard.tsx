@@ -12,9 +12,10 @@ interface PreviewCardProps {
 }
 
 const typeConfig = {
-  pwa: { label: "Progressive Web App", icon: Smartphone, color: "text-blue-400" },
-  apk: { label: "Android APK", icon: Package, color: "text-green-400" },
-  web: { label: "Web App", icon: Globe, color: "text-purple-400" },
+  pwa:   { label: "Progressive Web App", icon: Smartphone, color: "text-blue-400" },
+  apk:   { label: "Android APK",         icon: Package,    color: "text-green-400" },
+  web:   { label: "Web App",             icon: Globe,      color: "text-purple-400" },
+  store: { label: "Native App",          icon: Smartphone, color: "text-orange-400" },
 };
 
 export default function PreviewCard({ url, data, onSubmit }: PreviewCardProps) {

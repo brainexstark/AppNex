@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { name, description, type, url, icon, theme_color } =
+  const { name, description, type, url, icon, theme_color,
+          store_android, store_ios, store_windows } =
     body as Record<string, string>;
 
   // ── Validation ────────────────────────────────────────────
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "App name is required" }, { status: 400 });
   if (!url?.trim())
     return NextResponse.json({ error: "App URL is required" }, { status: 400 });
-  if (!["pwa", "apk", "web"].includes(type))
+  if (!["pwa", "apk", "web", "store"].includes(type))
     return NextResponse.json({ error: "Invalid app type" }, { status: 400 });
 
   try {
@@ -110,6 +111,10 @@ export async function POST(req: NextRequest) {
     icon: icon ?? "",
     theme_color: theme_color ?? null,
     is_published: true,
+    // Store links for native apps
+    store_android: store_android ?? null,
+    store_ios: store_ios ?? null,
+    store_windows: store_windows ?? null,
   };
   if (user) payload.owner_id = user.id;
 

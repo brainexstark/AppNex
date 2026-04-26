@@ -60,6 +60,9 @@ export default function HomeHero() {
         url: preview.url,
         icon: preview.data.icon,
         theme_color: preview.data.theme_color,
+        store_android: preview.data.store_android ?? null,
+        store_ios: preview.data.store_ios ?? null,
+        store_windows: preview.data.store_windows ?? null,
       }),
     });
     if (res.ok || res.status === 409) {

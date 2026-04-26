@@ -12,6 +12,7 @@ const typeConfig = {
   pwa: { label: "PWA", icon: Smartphone, color: "text-blue-400 bg-blue-400/10 border-blue-400/20" },
   apk: { label: "APK", icon: Package, color: "text-green-400 bg-green-400/10 border-green-400/20" },
   web: { label: "Web", icon: Globe, color: "text-purple-400 bg-purple-400/10 border-purple-400/20" },
+  store: { label: "Native", icon: Smartphone, color: "text-orange-400 bg-orange-400/10 border-orange-400/20" },
 };
 
 export default function AppCard({ app }: AppCardProps) {
