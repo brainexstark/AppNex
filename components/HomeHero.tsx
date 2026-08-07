@@ -115,10 +115,10 @@ export default function HomeHero() {
 
         {/* Sub-copy */}
         <p className="mb-10 text-sm sm:text-base text-gray-400 max-w-2xl mx-auto leading-relaxed">
-          AppNex is the universal app distribution platform. Paste any link — a PWA, an APK, or a
-          web app — and we automatically extract the icon, name, and description, then generate a
-          clean listing with a working install button. No developer account needed. No review
-          process. Just paste and publish.
+          AppNex creates <strong className="text-white">installable boxes</strong> for every app and website.
+          Each box holds the app&apos;s identity — icon, name, and URL. Install the box on any phone or PC,
+          and it opens the real app. No files downloaded. No app store gatekeeping. Just paste a URL and
+          your app becomes installable everywhere.
         </p>
 
         {/* URL Input */}
