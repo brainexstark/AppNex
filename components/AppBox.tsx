@@ -15,9 +15,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import InstallButton from "./InstallButton";
 import type { App } from "@/lib/types";
-import { Globe, Smartphone, Package, Star, TrendingUp } from "lucide-react";
+import { Globe, Smartphone, Package, Star, TrendingUp, Layers } from "lucide-react";
 
 interface AppBoxProps {
   app: App;
@@ -138,7 +137,13 @@ export default function AppBox({ app, featured = false }: AppBoxProps) {
 
       {/* Install button — bottom of the box */}
       <div className="px-4 pb-4 pt-2 border-t border-white/5">
-        <InstallButton app={app} size="sm" className="w-full" />
+        <Link
+          href={`/app/${app.id}`}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 text-xs font-bold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <Layers className="h-3.5 w-3.5" />
+          Install Box
+        </Link>
       </div>
     </div>
   );
