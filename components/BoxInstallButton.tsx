@@ -3,252 +3,170 @@
 /**
  * BoxInstallButton
  *
- * This is the heart of AppNex's "box" concept.
+ * Creates a home screen SHORTCUT for any app or website.
  *
- * When clicked:
- * 1. Registers a per-app service worker at /api/box/[id]/sw
- *    — this makes the /app/[id] page PWA-installable
- * 2. The page already has <link rel="manifest" href="/api/box/[id]/manifest">
- *    — that manifest's start_url IS the app's real URL
- * 3. Triggers the browser's beforeinstallprompt → native install dialog
- * 4. When the user accepts → the box is installed on their home screen/taskbar
- * 5. Tapping the installed box icon opens the REAL app URL in standalone mode
+ * The box IS the installable thing — a tiny PWA wrapper whose
+ * start_url points to the real app. Installing it puts an icon
+ * on the home screen. Tapping opens the app in standalone mode.
  *
- * For APKs: downloads the APK file directly
- * For Store apps: routes to the correct app store
+ * Works for Facebook, YouTube, random blogs — anything with a URL.
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Layers, Download, Smartphone, CheckCircle, Loader2 } from "lucide-react";
+import { Layers, CheckCircle, Loader2, Smartphone } from "lucide-react";
 import type { App } from "@/lib/types";
 
-interface Props {
-  app: App;
-}
+interface Props { app: App }
 
 interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
+  prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-type AppExt = App & {
-  store_android?: string | null;
-  store_ios?: string | null;
-  store_windows?: string | null;
-};
+type Phase = "loading" | "ready" | "prompting" | "done" | "manual";
 
-const KNOWN_STORES: Record<string, { android?: string; ios?: string }> = {
-  "tiktok.com":    { android: "https://play.google.com/store/apps/details?id=com.zhiliaoapp.musically", ios: "https://apps.apple.com/app/tiktok/id835599320" },
-  "instagram.com": { android: "https://play.google.com/store/apps/details?id=com.instagram.android",   ios: "https://apps.apple.com/app/instagram/id389801252" },
-  "facebook.com":  { android: "https://play.google.com/store/apps/details?id=com.facebook.katana",     ios: "https://apps.apple.com/app/facebook/id284882215" },
-  "twitter.com":   { android: "https://play.google.com/store/apps/details?id=com.twitter.android",     ios: "https://apps.apple.com/app/x/id333903271" },
-  "x.com":         { android: "https://play.google.com/store/apps/details?id=com.twitter.android",     ios: "https://apps.apple.com/app/x/id333903271" },
-  "snapchat.com":  { android: "https://play.google.com/store/apps/details?id=com.snapchat.android",    ios: "https://apps.apple.com/app/snapchat/id447188370" },
-  "youtube.com":   { android: "https://play.google.com/store/apps/details?id=com.google.android.youtube", ios: "https://apps.apple.com/app/youtube/id544007664" },
-  "whatsapp.com":  { android: "https://play.google.com/store/apps/details?id=com.whatsapp",            ios: "https://apps.apple.com/app/whatsapp/id310633997" },
-  "telegram.org":  { android: "https://play.google.com/store/apps/details?id=org.telegram.messenger",  ios: "https://apps.apple.com/app/telegram/id686449807" },
-  "spotify.com":   { android: "https://play.google.com/store/apps/details?id=com.spotify.music",       ios: "https://apps.apple.com/app/spotify/id324684580" },
-  "netflix.com":   { android: "https://play.google.com/store/apps/details?id=com.netflix.mediaclient", ios: "https://apps.apple.com/app/netflix/id363590051" },
-  "discord.com":   { android: "https://play.google.com/store/apps/details?id=com.discord",             ios: "https://apps.apple.com/app/discord/id985746746" },
-  "reddit.com":    { android: "https://play.google.com/store/apps/details?id=com.reddit.frontpage",    ios: "https://apps.apple.com/app/reddit/id1064216828" },
-  "linkedin.com":  { android: "https://play.google.com/store/apps/details?id=com.linkedin.android",    ios: "https://apps.apple.com/app/linkedin/id288429040" },
-  "uber.com":      { android: "https://play.google.com/store/apps/details?id=com.ubercab",             ios: "https://apps.apple.com/app/uber/id368677368" },
-  "threads.net":   { android: "https://play.google.com/store/apps/details?id=com.instagram.barcelona", ios: "https://apps.apple.com/app/threads/id6446901002" },
-};
-
-function getStoreUrl(app: AppExt): string | null {
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const isIOS     = /iPhone|iPad|iPod/.test(ua);
-  const isAndroid = /Android/.test(ua);
-  // DB store fields
-  if (isIOS && app.store_ios) return app.store_ios;
-  if (isAndroid && app.store_android) return app.store_android;
-  if (app.store_android || app.store_ios) return app.store_android || app.store_ios || null;
-  // Built-in map
-  try {
-    const domain = new URL(app.url).hostname.replace(/^www\./, "");
-    const entry = KNOWN_STORES[domain];
-    if (entry) {
-      if (isIOS && entry.ios) return entry.ios;
-      if (isAndroid && entry.android) return entry.android;
-      return entry.android || entry.ios || null;
-    }
-  } catch { /* ignore */ }
-  return null;
+function detectPlatform() {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return "ios";
+  if (/Android/.test(ua)) return "android";
+  return "desktop";
 }
 
 export default function BoxInstallButton({ app }: Props) {
-  const ext = app as AppExt;
-  const [phase, setPhase] = useState<"idle" | "registering" | "ready" | "installing" | "done">("idle");
-  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [phase, setPhase] = useState<Phase>("loading");
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const platform = detectPlatform();
 
-  // On mount, register the per-app service worker
-  // This makes this page installable as a standalone PWA
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    if (!("serviceWorker" in navigator)) { setPhase("manual"); return; }
 
-    const isApk   = app.type === "apk" || app.url.toLowerCase().endsWith(".apk");
-    const storeUrl = getStoreUrl(ext);
-    // APK and store apps don't need a SW
-    if (isApk || (app.type === "store" && storeUrl)) return;
-
-    // Listen for the install prompt BEFORE registering the SW
-    const promptHandler = (e: Event) => {
+    const onPrompt = (e: Event) => {
       e.preventDefault();
-      const pe = e as BeforeInstallPromptEvent;
-      promptRef.current = pe;
-      setPrompt(pe);
+      promptRef.current = e as BeforeInstallPromptEvent;
       setPhase("ready");
     };
-    window.addEventListener("beforeinstallprompt", promptHandler);
-    window.addEventListener("appinstalled", () => setPhase("done"));
+    const onInstalled = () => setPhase("done");
 
-    // Register the per-app service worker
-    setPhase("registering");
-    navigator.serviceWorker
-      .register(`/api/box/${app.id}/sw`, { scope: "/" })
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+
+    // Register the per-app service worker so the browser considers this page installable
+    navigator.serviceWorker.register(`/api/box/${app.id}/sw`, { scope: "/" })
       .then(() => {
-        // SW registered — browser may now fire beforeinstallprompt
-        // Give it a moment then check if we already have a prompt
         setTimeout(() => {
-          if (promptRef.current) {
-            setPhase("ready");
-          } else {
-            // SW registered but no prompt yet — check if page is installable
-            // Some browsers fire the event only after a brief delay
-            setPhase("ready"); // Allow clicking — we'll handle gracefully
-          }
-        }, 800);
+          setPhase(p => p === "loading" ? (promptRef.current ? "ready" : "manual") : p);
+        }, 1500);
       })
-      .catch(() => {
-        setPhase("ready"); // Still allow clicking even if SW fails
-      });
+      .catch(() => setPhase("manual"));
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", promptHandler);
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [app.id, app.type, app.url, ext]);
+  }, [app.id]);
 
-  async function handleClick() {
-    if (phase === "done") return;
-
-    const storeUrl = getStoreUrl(ext);
-    const isApk = app.type === "apk" || app.url.toLowerCase().endsWith(".apk");
-
-    // ── Store apps: go to correct store ──────────────────────
-    if (app.type === "store" || storeUrl) {
-      window.location.href = storeUrl || app.url;
-      return;
-    }
-
-    // ── APK: trigger download ─────────────────────────────────
-    if (isApk) {
-      const a = document.createElement("a");
-      a.href = app.url;
-      a.download = app.name.replace(/\s+/g, "-") + ".apk";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setPhase("done");
-      setTimeout(() => setPhase("idle"), 5000);
-      return;
-    }
-
-    // ── PWA / Web box: trigger native install prompt ──────────
-    const p = prompt || promptRef.current;
-    if (p) {
-      setPhase("installing");
+  async function handleInstall() {
+    // Native prompt available — trigger it directly
+    if (promptRef.current) {
+      setPhase("prompting");
       try {
-        await p.prompt();
-        const { outcome } = await p.userChoice;
-        setPhase(outcome === "accepted" ? "done" : "idle");
-      } catch {
-        setPhase("idle");
-      }
+        await promptRef.current.prompt();
+        const { outcome } = await promptRef.current.userChoice;
+        setPhase(outcome === "accepted" ? "done" : "ready");
+        if (outcome === "accepted") promptRef.current = null;
+      } catch { setPhase("ready"); }
       return;
     }
-
-    // No prompt available yet — the app may not meet PWA criteria
-    // Fall back: open in new tab with install hint
-    window.open(app.url, "_blank", "noopener,noreferrer");
+    // No prompt — show manual instructions
+    setPhase("manual");
   }
 
-  // ── Determine button appearance ───────────────────────────────
-  const storeUrl = getStoreUrl(ext);
-  const isApk   = app.type === "apk" || app.url.toLowerCase().endsWith(".apk");
-  const isStore = app.type === "store" || !!storeUrl;
+  // ── Done state ────────────────────────────────────────────
+  if (phase === "done") return (
+    <div className="space-y-3">
+      <div className="w-full flex items-center justify-center gap-3 rounded-2xl bg-green-500/15 border border-green-500/25 py-4 text-sm font-bold text-green-400">
+        <CheckCircle className="h-5 w-5" />
+        Shortcut installed!
+      </div>
+      <p className="text-xs text-gray-500 text-center">
+        Find <strong className="text-white">{app.name}</strong> on your home screen.
+        Tap it to open the app directly — no browser bar.
+      </p>
+    </div>
+  );
 
-  const config = {
-    idle:        { label: "Install Box",     icon: Layers,       spin: false },
-    registering: { label: "Preparing box…",  icon: Loader2,      spin: true  },
-    ready:       { label: "Install Box",     icon: Layers,       spin: false },
-    installing:  { label: "Installing…",     icon: Loader2,      spin: true  },
-    done:        { label: "Box Installed ✓", icon: CheckCircle,  spin: false },
-  };
+  // ── Manual instructions (iOS / unsupported) ───────────────
+  if (phase === "manual") {
+    const steps =
+      platform === "ios" ? [
+        "Tap the Share button (□↑) at the bottom of Safari",
+        'Scroll down and tap "Add to Home Screen"',
+        `Rename it "${app.name}" if you want, then tap Add`,
+      ] :
+      platform === "android" ? [
+        "Tap the three-dot menu (⋮) in Chrome",
+        '"Add to Home screen" or "Install app"',
+        "Tap Add / Install to confirm",
+      ] : [
+        "Look for the ⊕ install icon in Chrome/Edge's address bar",
+        "Click it and select Install",
+      ];
 
-  // Override for specific types
-  const label =
-    phase === "done"      ? "Installed ✓"     :
-    phase === "installing"? "Installing…"      :
-    phase === "registering"?"Preparing…"       :
-    isApk                 ? "Download & Install" :
-    isStore               ? "Get from Store"    :
-                            "Install Box";
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/8 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Smartphone className="h-5 w-5 text-blue-400" />
+            <p className="text-sm font-bold text-white">Add to Home Screen</p>
+          </div>
+          <ol className="space-y-2">
+            {steps.map((step, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-xs text-gray-300">
+                <span className="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-400">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
+        <p className="text-[11px] text-gray-600 text-center">
+          The shortcut opens <strong className="text-gray-400">{app.name}</strong> directly — no browser chrome.
+        </p>
+      </div>
+    );
+  }
 
-  const Icon =
-    phase === "done"                        ? CheckCircle :
-    phase === "installing" || phase === "registering" ? Loader2  :
-    isApk                                   ? Download    :
-    isStore                                 ? Smartphone  :
-                                              Layers;
-
-  void config; // unused destructure suppression
-
+  // ── Loading / ready / prompting ───────────────────────────
   return (
     <div className="space-y-3">
-      {/* Main install button */}
       <button
-        onClick={handleClick}
-        disabled={phase === "done" || phase === "installing" || phase === "registering"}
+        onClick={handleInstall}
+        disabled={phase === "loading" || phase === "prompting"}
         className={`
-          w-full flex items-center justify-center gap-3 rounded-2xl py-4 text-base font-bold
-          transition-all duration-200 select-none
-          ${phase === "done"
-            ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default"
-            : phase === "installing" || phase === "registering"
-            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30 cursor-wait"
-            : "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-xl hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98]"
+          w-full flex items-center justify-center gap-3 rounded-2xl py-4
+          text-sm font-bold transition-all duration-150 select-none
+          ${phase === "loading" || phase === "prompting"
+            ? "bg-white/5 border border-white/10 text-gray-400 cursor-wait"
+            : "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]"
           }
         `}
       >
-        <Icon
-          className={`h-5 w-5 ${phase === "installing" || phase === "registering" ? "animate-spin" : ""}`}
-        />
-        {label}
+        {phase === "loading" || phase === "prompting"
+          ? <Loader2 className="h-5 w-5 animate-spin" />
+          : <Layers className="h-5 w-5" />
+        }
+        {phase === "loading"   ? "Preparing…" :
+         phase === "prompting" ? "Installing…" :
+                                 "Install Shortcut"}
       </button>
 
-      {/* What happens explanation */}
-      {phase === "idle" || phase === "registering" || phase === "ready" ? (
-        <div className="rounded-xl bg-white/3 border border-white/5 p-3">
-          <p className="text-xs text-gray-500 text-center leading-relaxed">
-            {isApk
-              ? "📦 Downloads the APK file directly to your device"
-              : isStore
-              ? "📱 Opens the correct app store for your device"
-              : "📲 Installs a home screen shortcut that opens this app directly — nothing is downloaded to our servers"
-            }
-          </p>
-        </div>
-      ) : null}
-
-      {phase === "done" && !isApk && !isStore && (
-        <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-3">
-          <p className="text-xs text-green-400 text-center font-medium">
-            ✓ Box installed! Find <strong>{app.name}</strong> on your home screen or app drawer
-          </p>
-        </div>
-      )}
+      <p className="text-[11px] text-gray-500 text-center leading-relaxed">
+        Installs a <strong className="text-gray-400">home screen shortcut</strong> for{" "}
+        <strong className="text-gray-400">{app.name}</strong>.
+        Nothing is downloaded — the shortcut opens the app directly.
+      </p>
     </div>
   );
 }

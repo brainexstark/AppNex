@@ -1,121 +1,77 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand-blue: #3B82F6;
-  --color-brand-purple: #8B5CF6;
-  --color-brand-dark: #0F0F1A;
-  --color-brand-card: #1A1A2E;
-  --color-brand-border: #2A2A4A;
-  --color-brand-muted: #6B7280;
-
-  --background-image-brand-gradient: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-  --background-image-card-gradient: linear-gradient(145deg, #1A1A2E 0%, #16213E 100%);
-
-  --animate-fade-in: fadeIn 0.3s ease-out;
-  --animate-slide-up: slideUp 0.4s ease-out;
-  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
 /* ─── Keyframes ─────────────────────────────────────────── */
 @keyframes fadeIn {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes slideUp {
-  0%   { opacity: 0; transform: translateY(20px); }
-  100% { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideDown {
-  0%   { opacity: 0; transform: translateY(-12px); }
-  100% { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
-/* Dynamic hero background — cycles through colour stops */
-@keyframes heroBg {
-  0%   { background-position: 0%   50%; }
-  25%  { background-position: 50%  0%;  }
-  50%  { background-position: 100% 50%; }
-  75%  { background-position: 50%  100%;}
-  100% { background-position: 0%   50%; }
-}
-
-/* Floating orbs */
-@keyframes floatA {
-  0%, 100% { transform: translate(0, 0)    scale(1);    }
-  33%       { transform: translate(40px,-30px) scale(1.08); }
-  66%       { transform: translate(-20px,20px) scale(0.95); }
-}
-@keyframes floatB {
-  0%, 100% { transform: translate(0, 0)    scale(1);    }
-  40%       { transform: translate(-50px,25px) scale(1.1);  }
-  70%       { transform: translate(30px,-40px) scale(0.92); }
-}
-@keyframes floatC {
-  0%, 100% { transform: translate(0, 0)    scale(1);    }
-  50%       { transform: translate(20px,50px)  scale(1.05); }
-}
-
-/* Shimmer loading */
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
 }
-
-/* Pulse ring */
 @keyframes pulse-ring {
-  0%   { transform: scale(0.95); box-shadow: 0 0 0 0   rgba(59,130,246,0.4); }
-  70%  { transform: scale(1);    box-shadow: 0 0 0 10px rgba(59,130,246,0);   }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0   rgba(59,130,246,0);   }
+  0%   { box-shadow: 0 0 0 0   rgba(59,130,246,0.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(59,130,246,0);   }
+  100% { box-shadow: 0 0 0 0   rgba(59,130,246,0);   }
 }
-
-/* Typing cursor blink */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
+/* Subtle background shift — GPU-friendly (only background-position) */
+@keyframes heroBg {
+  0%,100% { background-position: 0% 50%;   }
+  50%     { background-position: 100% 50%; }
 }
 
 /* ─── Base ───────────────────────────────────────────────── */
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   background-color: #0F0F1A;
   color: #F9FAFB;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Prevent layout shifts on mobile */
+  overflow-x: hidden;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────── */
-::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: #0F0F1A; }
-::-webkit-scrollbar-thumb { background: #2A2A4A; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+::-webkit-scrollbar-thumb { background: #2A2A4A; border-radius: 2px; }
 
-/* ─── Dynamic hero background ────────────────────────────── */
+/* ─── Hero background — lightweight, no floating orbs ───── */
 .hero-bg {
-  background: linear-gradient(
-    135deg,
-    #0F0F1A 0%,
-    #0d1b3e 15%,
-    #1a0533 30%,
-    #0a1628 45%,
-    #1b0a3a 60%,
-    #0c2040 75%,
-    #160830 90%,
-    #0F0F1A 100%
-  );
-  background-size: 400% 400%;
-  animation: heroBg 12s ease infinite;
+  background: linear-gradient(135deg, #0F0F1A 0%, #0d1b3e 40%, #1a0533 70%, #0F0F1A 100%);
+  background-size: 300% 300%;
+  /* Only animate on desktop — saves battery on mobile */
+  animation: heroBg 16s ease infinite;
+}
+@media (max-width: 768px) {
+  .hero-bg {
+    /* Static gradient on mobile — no animation = no jank */
+    animation: none;
+    background: linear-gradient(135deg, #0F0F1A 0%, #0d1b3e 50%, #0F0F1A 100%);
+    background-size: 100% 100%;
+  }
 }
 
-/* Floating orbs */
-.orb-a {
-  animation: floatA 14s ease-in-out infinite;
+/* Orb decorations — hidden on mobile to prevent GPU overload */
+.orb-a, .orb-b, .orb-c {
+  animation: none; /* Remove float animations entirely */
 }
-.orb-b {
-  animation: floatB 18s ease-in-out infinite;
+@media (min-width: 768px) {
+  .orb-a { opacity: 0.7; }
+  .orb-b { opacity: 0.6; }
+  .orb-c { opacity: 0.5; }
 }
-.orb-c {
-  animation: floatC 22s ease-in-out infinite;
+@media (max-width: 767px) {
+  .orb-a, .orb-b, .orb-c { display: none; }
 }
 
 /* ─── Gradient text ──────────────────────────────────────── */
@@ -125,64 +81,46 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-.gradient-text-warm {
-  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 50%, #8B5CF6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+
+/* ─── Glass card — no blur on mobile ────────────────────── */
+.glass {
+  background: rgba(26, 26, 46, 0.85);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+@media (min-width: 768px) {
+  .glass {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
 }
 
-/* ─── Glow ───────────────────────────────────────────────── */
-.glow-blue   { box-shadow: 0 0 20px rgba(59,130,246,0.3); }
-.glow-purple { box-shadow: 0 0 20px rgba(139,92,246,0.3); }
-
-/* ─── Card hover ─────────────────────────────────────────── */
-.app-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-.app-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(59,130,246,0.1);
+/* ─── Card hover — desktop only ─────────────────────────── */
+.app-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+@media (min-width: 768px) {
+  .app-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 32px rgba(0,0,0,0.35), 0 0 20px rgba(59,130,246,0.08);
+  }
 }
 
 /* ─── Shimmer ────────────────────────────────────────────── */
 .shimmer {
   background: linear-gradient(90deg, #1A1A2E 25%, #2A2A4A 50%, #1A1A2E 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 1.4s infinite;
 }
 
 /* ─── Pulse ring ─────────────────────────────────────────── */
-.pulse-ring { animation: pulse-ring 2s infinite; }
+.pulse-ring { animation: pulse-ring 2s ease-out infinite; }
 
-/* ─── Animate utilities ──────────────────────────────────── */
-.animate-fade-in  { animation: fadeIn  0.3s ease-out; }
-.animate-slide-up { animation: slideUp 0.4s ease-out; }
-.animate-slide-down { animation: slideDown 0.3s ease-out; }
+/* ─── Animations ─────────────────────────────────────────── */
+.animate-fade-in   { animation: fadeIn   0.25s ease-out; }
+.animate-slide-up  { animation: slideUp  0.3s  ease-out; }
+.animate-slide-down{ animation: slideDown 0.25s ease-out; }
 
-/* ─── Typing cursor ──────────────────────────────────────── */
-.cursor-blink::after {
-  content: "|";
-  animation: blink 1s step-end infinite;
-  color: #3B82F6;
-  margin-left: 2px;
-}
-
-/* ─── Glass card ─────────────────────────────────────────── */
-.glass {
-  background: rgba(26, 26, 46, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.06);
-}
-
-/* ─── Gradient border button ─────────────────────────────── */
-.btn-gradient {
-  background: linear-gradient(135deg, #3B82F6, #8B5CF6);
-  transition: all 0.2s ease;
-}
-.btn-gradient:hover {
-  box-shadow: 0 0 24px rgba(99,102,241,0.5);
-  transform: translateY(-1px) scale(1.02);
-}
-.btn-gradient:active {
-  transform: scale(0.97);
+/* ─── Touch targets — minimum 44px on mobile ────────────── */
+@media (max-width: 767px) {
+  button, a[role="button"] {
+    min-height: 44px;
+  }
 }
