@@ -3,170 +3,173 @@
 /**
  * BoxInstallButton
  *
- * Creates a home screen SHORTCUT for any app or website.
+ * This component does ONE thing: install the current page as a PWA.
  *
- * The box IS the installable thing — a tiny PWA wrapper whose
- * start_url points to the real app. Installing it puts an icon
- * on the home screen. Tapping opens the app in standalone mode.
+ * The page already has:
+ *   <link rel="manifest" href="/api/box/[id]/manifest">
  *
- * Works for Facebook, YouTube, random blogs — anything with a URL.
+ * That manifest has start_url = the app's real URL, so the
+ * installed icon opens the real app. But the BOX itself is what
+ * gets installed — it's a PWA wrapper, not the app files.
+ *
+ * No URL routing. No store detection. No open-in-tab.
+ * Just: register SW → capture beforeinstallprompt → call prompt().
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Layers, CheckCircle, Loader2, Smartphone } from "lucide-react";
-import type { App } from "@/lib/types";
+import { Layers, CheckCircle, Loader2 } from "lucide-react";
 
-interface Props { app: App }
+interface Props {
+  app: { id: string; name: string };
+}
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-type Phase = "loading" | "ready" | "prompting" | "done" | "manual";
-
-function detectPlatform() {
-  if (typeof navigator === "undefined") return "other";
-  const ua = navigator.userAgent;
-  if (/iPhone|iPad|iPod/.test(ua)) return "ios";
-  if (/Android/.test(ua)) return "android";
-  return "desktop";
-}
-
 export default function BoxInstallButton({ app }: Props) {
-  const [phase, setPhase] = useState<Phase>("loading");
-  const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
-  const platform = detectPlatform();
+  const [state, setState] = useState<
+    "init" | "ready" | "prompting" | "done" | "ios" | "unsupported"
+  >("init");
+  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) { setPhase("manual"); return; }
+    // iOS Safari doesn't support beforeinstallprompt
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      setState("ios");
+      return;
+    }
 
+    if (!("serviceWorker" in navigator)) {
+      setState("unsupported");
+      return;
+    }
+
+    // Already running as installed PWA — no need to show install button
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setState("done");
+      return;
+    }
+
+    // Capture the install prompt the moment the browser fires it
     const onPrompt = (e: Event) => {
       e.preventDefault();
-      promptRef.current = e as BeforeInstallPromptEvent;
-      setPhase("ready");
+      deferredPrompt.current = e as BeforeInstallPromptEvent;
+      setState("ready");
     };
-    const onInstalled = () => setPhase("done");
-
     window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("appinstalled", () => setState("done"));
 
-    // Register the per-app service worker so the browser considers this page installable
-    navigator.serviceWorker.register(`/api/box/${app.id}/sw`, { scope: "/" })
+    // Register the per-app service worker.
+    // Once the SW is active + manifest is present → browser fires beforeinstallprompt.
+    navigator.serviceWorker
+      .register(`/api/box/${app.id}/sw`, { scope: `/app/${app.id}` })
       .then(() => {
+        // Give browser time to evaluate — if it already fired before registration
+        // we won't get another event, but the prompt ref may already be set.
         setTimeout(() => {
-          setPhase(p => p === "loading" ? (promptRef.current ? "ready" : "manual") : p);
-        }, 1500);
+          setState((prev) => {
+            if (prev === "init") return deferredPrompt.current ? "ready" : "unsupported";
+            return prev;
+          });
+        }, 2000);
       })
-      .catch(() => setPhase("manual"));
+      .catch(() => setState("unsupported"));
 
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, [app.id]);
 
   async function handleInstall() {
-    // Native prompt available — trigger it directly
-    if (promptRef.current) {
-      setPhase("prompting");
-      try {
-        await promptRef.current.prompt();
-        const { outcome } = await promptRef.current.userChoice;
-        setPhase(outcome === "accepted" ? "done" : "ready");
-        if (outcome === "accepted") promptRef.current = null;
-      } catch { setPhase("ready"); }
-      return;
+    const prompt = deferredPrompt.current;
+    if (!prompt) return;
+    setState("prompting");
+    try {
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      setState(outcome === "accepted" ? "done" : "ready");
+      if (outcome === "accepted") deferredPrompt.current = null;
+    } catch {
+      setState("ready");
     }
-    // No prompt — show manual instructions
-    setPhase("manual");
   }
 
-  // ── Done state ────────────────────────────────────────────
-  if (phase === "done") return (
-    <div className="space-y-3">
-      <div className="w-full flex items-center justify-center gap-3 rounded-2xl bg-green-500/15 border border-green-500/25 py-4 text-sm font-bold text-green-400">
+  // ── Done ─────────────────────────────────────────────────────
+  if (state === "done") return (
+    <div className="space-y-2">
+      <div className="w-full flex items-center justify-center gap-2 rounded-2xl bg-green-500/15 border border-green-500/25 py-4 text-sm font-bold text-green-400">
         <CheckCircle className="h-5 w-5" />
-        Shortcut installed!
+        Installed on your device!
       </div>
       <p className="text-xs text-gray-500 text-center">
         Find <strong className="text-white">{app.name}</strong> on your home screen.
-        Tap it to open the app directly — no browser bar.
+        Tap it to open the app.
       </p>
     </div>
   );
 
-  // ── Manual instructions (iOS / unsupported) ───────────────
-  if (phase === "manual") {
-    const steps =
-      platform === "ios" ? [
-        "Tap the Share button (□↑) at the bottom of Safari",
-        'Scroll down and tap "Add to Home Screen"',
-        `Rename it "${app.name}" if you want, then tap Add`,
-      ] :
-      platform === "android" ? [
-        "Tap the three-dot menu (⋮) in Chrome",
-        '"Add to Home screen" or "Install app"',
-        "Tap Add / Install to confirm",
-      ] : [
-        "Look for the ⊕ install icon in Chrome/Edge's address bar",
-        "Click it and select Install",
-      ];
+  // ── iOS (no beforeinstallprompt support) ─────────────────────
+  if (state === "ios") return (
+    <div className="rounded-2xl border border-blue-500/20 bg-blue-500/8 p-4 space-y-3">
+      <p className="text-sm font-bold text-white">Add to Home Screen</p>
+      <ol className="space-y-2">
+        {[
+          'Tap the Share button (□↑) at the bottom of Safari',
+          'Tap "Add to Home Screen"',
+          `Tap "Add" — ${app.name} appears on your home screen`,
+        ].map((step, i) => (
+          <li key={i} className="flex items-start gap-2.5 text-xs text-gray-300">
+            <span className="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-400">{i + 1}</span>
+            {step}
+          </li>
+        ))}
+      </ol>
+      <p className="text-[11px] text-gray-600 text-center">
+        The shortcut opens {app.name} directly — no browser bar
+      </p>
+    </div>
+  );
 
-    return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/8 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Smartphone className="h-5 w-5 text-blue-400" />
-            <p className="text-sm font-bold text-white">Add to Home Screen</p>
-          </div>
-          <ol className="space-y-2">
-            {steps.map((step, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-xs text-gray-300">
-                <span className="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-400">
-                  {i + 1}
-                </span>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </div>
-        <p className="text-[11px] text-gray-600 text-center">
-          The shortcut opens <strong className="text-gray-400">{app.name}</strong> directly — no browser chrome.
-        </p>
-      </div>
-    );
-  }
+  // ── Unsupported browser ───────────────────────────────────────
+  if (state === "unsupported") return (
+    <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-center space-y-2">
+      <p className="text-sm font-bold text-white">Install as shortcut</p>
+      <p className="text-xs text-gray-400">
+        In Chrome or Edge, click the <strong>⊕</strong> icon in the address bar to install.
+        In other browsers, use &ldquo;Add to Home Screen&rdquo; from the menu.
+      </p>
+    </div>
+  );
 
-  // ── Loading / ready / prompting ───────────────────────────
+  // ── Loading / Ready / Prompting ───────────────────────────────
+  const isLoading = state === "init" || state === "prompting";
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <button
         onClick={handleInstall}
-        disabled={phase === "loading" || phase === "prompting"}
+        disabled={isLoading || state !== "ready"}
         className={`
           w-full flex items-center justify-center gap-3 rounded-2xl py-4
           text-sm font-bold transition-all duration-150 select-none
-          ${phase === "loading" || phase === "prompting"
-            ? "bg-white/5 border border-white/10 text-gray-400 cursor-wait"
-            : "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]"
+          ${isLoading
+            ? "bg-white/5 border border-white/10 text-gray-500 cursor-wait"
+            : "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-xl hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]"
           }
         `}
       >
-        {phase === "loading" || phase === "prompting"
+        {isLoading
           ? <Loader2 className="h-5 w-5 animate-spin" />
           : <Layers className="h-5 w-5" />
         }
-        {phase === "loading"   ? "Preparing…" :
-         phase === "prompting" ? "Installing…" :
-                                 "Install Shortcut"}
+        {state === "init"      ? "Preparing…" :
+         state === "prompting" ? "Installing…" :
+                                 `Install ${app.name}`}
       </button>
-
-      <p className="text-[11px] text-gray-500 text-center leading-relaxed">
-        Installs a <strong className="text-gray-400">home screen shortcut</strong> for{" "}
-        <strong className="text-gray-400">{app.name}</strong>.
-        Nothing is downloaded — the shortcut opens the app directly.
-      </p>
+      {state === "ready" && (
+        <p className="text-[11px] text-gray-500 text-center">
+          Installs a home screen shortcut — opens {app.name} directly when tapped
+        </p>
+      )}
     </div>
   );
 }

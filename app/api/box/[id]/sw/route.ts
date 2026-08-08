@@ -1,48 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 
 /**
- * Dynamic service worker for each app box.
- * GET /api/box/[id]/sw
- *
- * This SW is registered on the /app/[id] page.
- * Its sole job is to satisfy the browser's PWA installability requirement
- * (a page must have a registered SW to be installable).
- *
- * The SW itself is minimal — it doesn't intercept fetches or cache anything.
- * All it does is exist so the browser allows the install prompt.
+ * Per-app service worker.
+ * Scoped to /app/[id] — satisfies browser PWA installability requirement.
  */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const scope = `/app/${id}`;
 
-  // Minimal service worker — just needs to exist and activate
-  const swCode = `
-// AppNex Box Service Worker — v1
-// App ID: ${id}
-// This worker makes the app box installable as a PWA.
+  const sw = [
+    `// AppNex Box SW — ${id}`,
+    `const CACHE = "box-${id}-v1";`,
+    `self.addEventListener("install", (e) => {`,
+    `  e.waitUntil(caches.open(CACHE).then((c) => c.add("${scope}").catch(() => {})));`,
+    `  self.skipWaiting();`,
+    `});`,
+    `self.addEventListener("activate", (e) => {`,
+    `  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));`,
+    `  self.clients.claim();`,
+    `});`,
+    `self.addEventListener("fetch", () => {});`,
+  ].join("\n");
 
-self.addEventListener('install', () => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
-});
-
-// Minimal fetch handler — pass everything through
-self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
-});
-`.trim();
-
-  return new NextResponse(swCode, {
+  return new NextResponse(sw, {
     headers: {
-      "Content-Type": "application/javascript",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Service-Worker-Allowed": "/",
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Service-Worker-Allowed": scope,
     },
   });
 }
