@@ -4,7 +4,7 @@ import { AuthProvider } from "@/lib/context/AuthContext";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://appnex.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app-nex.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -1,5 +1,8 @@
 /**
  * Auth helpers — lazy Supabase client, safe for SSR.
+ *
+ * ALL auth callbacks (OAuth, email confirmation, password reset)
+ * point to https://app-nex.vercel.app — never localhost.
  */
 
 async function getClient() {
@@ -7,16 +10,18 @@ async function getClient() {
   return createClient();
 }
 
-function siteOrigin(): string {
-  if (typeof window !== "undefined") return window.location.origin;
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://appnex.app";
-}
+/** Canonical origin — always the Vercel deployment */
+const SITE_URL = "https://app-nex.vercel.app";
 
 export async function signUp(email: string, password: string, fullName: string) {
   const supabase = await getClient();
   return supabase.auth.signUp({
-    email, password,
-    options: { data: { full_name: fullName }, emailRedirectTo: `${siteOrigin()}/auth/callback` },
+    email,
+    password,
+    options: {
+      data: { full_name: fullName },
+      emailRedirectTo: `${SITE_URL}/auth/callback`,
+    },
   });
 }
 
@@ -39,7 +44,7 @@ export async function getSession() {
 export async function resetPassword(email: string) {
   const supabase = await getClient();
   return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteOrigin()}/auth/reset-password`,
+    redirectTo: `${SITE_URL}/auth/reset-password`,
   });
 }
 
@@ -48,13 +53,14 @@ export async function updatePassword(newPassword: string) {
   return supabase.auth.updateUser({ password: newPassword });
 }
 
-// ── OAuth providers ───────────────────────────────────────────
-
 export async function signInWithGoogle() {
   const supabase = await getClient();
   return supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${siteOrigin()}/auth/callback`, queryParams: { prompt: "select_account" } },
+    options: {
+      redirectTo: `${SITE_URL}/auth/callback`,
+      queryParams: { prompt: "select_account" },
+    },
   });
 }
 
@@ -62,7 +68,7 @@ export async function signInWithGitHub() {
   const supabase = await getClient();
   return supabase.auth.signInWithOAuth({
     provider: "github",
-    options: { redirectTo: `${siteOrigin()}/auth/callback` },
+    options: { redirectTo: `${SITE_URL}/auth/callback` },
   });
 }
 
@@ -70,6 +76,6 @@ export async function signInWithApple() {
   const supabase = await getClient();
   return supabase.auth.signInWithOAuth({
     provider: "apple",
-    options: { redirectTo: `${siteOrigin()}/auth/callback` },
+    options: { redirectTo: `${SITE_URL}/auth/callback` },
   });
 }
