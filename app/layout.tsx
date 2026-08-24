@@ -8,9 +8,9 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app-nex.vercel.app"
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "AppNex — Install Apps From Anywhere",
+  title: "AppNex — Install All Websites From Anywhere",
   description:
-    "The universal app distribution platform. Paste any URL — PWA, APK, or web app — and get a clean listing with a working install button.",
+    "INSTALL ALL WEBSITES FROM ANYWHERE",
   keywords: ["PWA", "APK", "web apps", "install", "app store", "app distribution"],
   authors: [{ name: "AppNex" }],
   creator: "AppNex",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     title: "AppNex",
   },
   openGraph: {
-    title: "AppNex — Install Apps From Anywhere",
+    title: "AppNex — Install All Websites From Anywhere",
     description: "The universal app distribution platform.",
     type: "website",
     siteName: "AppNex",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AppNex",
-    description: "Install apps from anywhere",
+    description: "Install all websites from anywhere",
     images: ["/icon.svg"],
   },
   icons: {
