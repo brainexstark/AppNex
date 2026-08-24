@@ -90,8 +90,8 @@ export default function HomeHero() {
 
       <div className="relative mx-auto max-w-4xl px-4 sm:px-6 py-24 sm:py-32 text-center">
 
-        {/* Live badge */}
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-300 backdrop-blur-sm">
+        {/* Live badge — no blur on mobile */}
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-[#162040] md:bg-blue-500/10 md:backdrop-blur-sm px-4 py-1.5 text-xs font-semibold text-blue-300">
           <span className="h-1.5 w-1.5 rounded-full bg-blue-400 pulse-ring" />
           Now live — submit your app in seconds
         </div>
@@ -165,9 +165,9 @@ export default function HomeHero() {
         )}
       </div>
 
-      {/* ── Feature strip ── */}
+      {/* ── Feature strip — no blur on mobile ── */}
       {!preview && (
-        <div className="relative border-t border-white/5 bg-black/20 backdrop-blur-sm">
+        <div className="relative border-t border-white/5 bg-[#0A0A14] md:bg-black/20 md:backdrop-blur-sm">
           <div className="mx-auto max-w-4xl px-4 sm:px-6 py-8">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {[

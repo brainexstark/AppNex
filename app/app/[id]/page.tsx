@@ -3,10 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import Navbar from "@/components/Navbar";
 import AppIcon from "@/components/AppIcon";
 import BoxInstallButton from "@/components/BoxInstallButton";
+import StandaloneRedirect from "@/components/StandaloneRedirect";
 import type { App } from "@/lib/types";
 import {
   Globe, Smartphone, Package, ArrowLeft,
-  Calendar, ExternalLink, Star, TrendingUp, Eye,
+  ExternalLink, Star, TrendingUp, Eye,
 } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -53,6 +54,17 @@ const typeConfig = {
   store: { label: "Native App",   icon: Smartphone, color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20" },
 };
 
+function resolveAppIcon(app: App): string | null {
+  if (app.icon?.startsWith("http")) return app.icon;
+  try {
+    const hostname = new URL(app.url).hostname.replace(/^www\./, "");
+    if (!hostname) return null;
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=256`;
+  } catch {
+    return null;
+  }
+}
+
 export default async function AppPage({ params }: Props) {
   const { id } = await params;
   const [app, reviews] = await Promise.all([getApp(id), getReviews(id)]);
@@ -62,6 +74,7 @@ export default async function AppPage({ params }: Props) {
   const TypeIcon = type.icon;
   const ext = app as unknown as Record<string, unknown>;
   const installCount = (ext.install_count as number) ?? 0;
+  const resolvedIcon = resolveAppIcon(app);
 
   return (
     <div className="min-h-screen bg-[#0F0F1A]">
@@ -73,7 +86,21 @@ export default async function AppPage({ params }: Props) {
       */}
       <link rel="manifest" href={`/api/box/${id}/manifest`} />
       <meta name="theme-color" content={String(ext.theme_color || "#3B82F6")} />
-      {app.icon && <link rel="apple-touch-icon" href={app.icon} />}
+      {resolvedIcon && (
+        <>
+          <link rel="apple-touch-icon" href={resolvedIcon} />
+          <link rel="icon" href={resolvedIcon} />
+          <link rel="shortcut icon" href={resolvedIcon} />
+        </>
+      )}
+
+      {/*
+        When this page is launched from the installed PWA box on the
+        home screen, display-mode: standalone matches — immediately
+        redirect the user to the real external app URL so the "box"
+        behaves like a launcher for the actual app/website.
+      */}
+      <StandaloneRedirect to={app.url} />
 
       <Navbar />
 

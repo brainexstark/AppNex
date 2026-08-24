@@ -134,7 +134,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#0F0F1A]/80 backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#0F0F1A] md:bg-[#0F0F1A]/80 md:backdrop-blur-xl md:backdrop-saturate-150">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between gap-4">
 
@@ -283,10 +283,10 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — NO backdrop-blur on mobile (GPU crash source), fully opaque */}
       {drawerOpen && (
         <div ref={drawerRef} className="fixed inset-x-0 top-16 z-40 animate-slide-down md:hidden">
-          <div className="mx-3 mt-1 rounded-2xl border border-white/8 bg-[#12122A]/95 backdrop-blur-2xl shadow-2xl overflow-hidden">
+          <div className="mx-3 mt-1 rounded-2xl border border-white/8 bg-[#12122A] shadow-2xl overflow-hidden">
 
             {/* User profile card */}
             {!loading && user && (
@@ -356,7 +356,7 @@ export default function Navbar() {
         </div>
       )}
 
-      {drawerOpen && <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm md:hidden" onClick={() => setDrawerOpen(false)} />}
+      {drawerOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setDrawerOpen(false)} />}
     </>
   );
 }

@@ -1,17 +1,19 @@
 @import "tailwindcss";
 
-/* ─── Keyframes ─────────────────────────────────────────── */
+/* ─── Keyframes ───────────────────────────────────────────
+   All animations GPU-isolated with will-change + translateZ.
+   Mobile <768px disables all non-critical animations. */
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px) translateZ(0); }
+  to   { opacity: 1; transform: translateY(0) translateZ(0); }
 }
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-10px) translateZ(0); }
+  to   { opacity: 1; transform: translateY(0) translateZ(0); }
 }
 @keyframes shimmer {
   from { background-position: -200% 0; }
@@ -22,22 +24,50 @@
   70%  { box-shadow: 0 0 0 8px rgba(59,130,246,0);   }
   100% { box-shadow: 0 0 0 0   rgba(59,130,246,0);   }
 }
-/* Subtle background shift — GPU-friendly (only background-position) */
 @keyframes heroBg {
   0%,100% { background-position: 0% 50%;   }
   50%     { background-position: 100% 50%; }
 }
 
-/* ─── Base ───────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; }
+/* ─── Base — mobile crash prevention (CRITICAL) ────────────
+   Every rule here exists to prevent the "broken screen" GPU
+   corruption effect seen on iOS Safari and Android Chrome. */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
 
-body {
+html, body {
   background-color: #0F0F1A;
   color: #F9FAFB;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* Prevent layout shifts on mobile */
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  /* Prevent iOS rubber-band overscroll glitches */
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Root-layer GPU isolation — prevents compositing crashes */
+body {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  perspective: 1000;
+}
+
+@media (max-width: 767px) {
+  html, body {
+    /* Disable ALL scroll-based effects on mobile */
+    background-attachment: scroll !important;
+  }
+  /* Kill will-change on low-end devices (re-enables only when animating) */
+  [class*="will-change"] { will-change: auto !important; }
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────── */
@@ -45,25 +75,27 @@ body {
 ::-webkit-scrollbar-track { background: #0F0F1A; }
 ::-webkit-scrollbar-thumb { background: #2A2A4A; border-radius: 2px; }
 
-/* ─── Hero background — lightweight, no floating orbs ───── */
+/* ─── Hero background ────────────────────────────────────── */
 .hero-bg {
   background: linear-gradient(135deg, #0F0F1A 0%, #0d1b3e 40%, #1a0533 70%, #0F0F1A 100%);
   background-size: 300% 300%;
-  /* Only animate on desktop — saves battery on mobile */
   animation: heroBg 16s ease infinite;
+  /* GPU-isolate the animated gradient */
+  transform: translateZ(0);
+  will-change: background-position;
 }
 @media (max-width: 768px) {
   .hero-bg {
-    /* Static gradient on mobile — no animation = no jank */
     animation: none;
     background: linear-gradient(135deg, #0F0F1A 0%, #0d1b3e 50%, #0F0F1A 100%);
     background-size: 100% 100%;
+    will-change: auto;
   }
 }
 
 /* Orb decorations — hidden on mobile to prevent GPU overload */
 .orb-a, .orb-b, .orb-c {
-  animation: none; /* Remove float animations entirely */
+  animation: none;
 }
 @media (min-width: 768px) {
   .orb-a { opacity: 0.7; }
@@ -71,7 +103,7 @@ body {
   .orb-c { opacity: 0.5; }
 }
 @media (max-width: 767px) {
-  .orb-a, .orb-b, .orb-c { display: none; }
+  .orb-a, .orb-b, .orb-c { display: none !important; }
 }
 
 /* ─── Gradient text ──────────────────────────────────────── */
@@ -82,23 +114,29 @@ body {
   background-clip: text;
 }
 
-/* ─── Glass card — no blur on mobile ────────────────────── */
+/* ─── Glass card — NO blur on mobile (major crash source!) ─ */
 .glass {
-  background: rgba(26, 26, 46, 0.85);
+  background: rgba(26, 26, 46, 0.92);
   border: 1px solid rgba(255,255,255,0.08);
+  transform: translateZ(0);
 }
 @media (min-width: 768px) {
   .glass {
+    background: rgba(26, 26, 46, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
 }
 
-/* ─── Card hover — desktop only ─────────────────────────── */
-.app-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+/* ─── Card hover — desktop only, GPU-friendly ───────────── */
+.app-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transform: translateZ(0);
+  contain: layout paint style;
+}
 @media (min-width: 768px) {
   .app-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-3px) translateZ(0);
     box-shadow: 0 16px 32px rgba(0,0,0,0.35), 0 0 20px rgba(59,130,246,0.08);
   }
 }
@@ -120,7 +158,109 @@ body {
 
 /* ─── Touch targets — minimum 44px on mobile ────────────── */
 @media (max-width: 767px) {
+  button,
+  a[role="button"],
+  a[href] {
+    -webkit-tap-highlight-color: transparent;
+  }
   button, a[role="button"] {
     min-height: 44px;
+    touch-action: manipulation;
   }
+}
+
+/* ─── Backdrop-blur mobile safety ─────────────────────────
+   Heavy backdrop-blur is the #1 cause of iOS "broken screen" glitches.
+   Also disable blur filter utilities (blur-2xl, blur-3xl) which are used
+   for background glow orbs — these cause compositor crashes on A-series chips. */
+@media (max-width: 767px) {
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  [class*="blur-2xl"], [class*="blur-3xl"] {
+    filter: none !important;
+  }
+  /* Hide decorative blur-using orbs entirely on mobile */
+  [class*="orb-"], .orb-a, .orb-b, .orb-c {
+    display: none !important;
+    opacity: 0 !important;
+  }
+}
+
+/* ─── Card / shadow containment on mobile ───────────────── */
+@media (max-width: 767px) {
+  /* Colored box-shadows are GPU-heavy on mobile — use flat shadows only */
+  [class*="shadow-blue"], [class*="shadow-purple"], [class*="shadow-2xl"], [class*="shadow-xl"], [class*="shadow-lg"] {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.22) !important;
+    text-shadow: none !important;
+  }
+
+  /* Contain all interactive card-like elements to their own paint layers */
+  [class*="AppBox"], [class*="AppCard"], [class*="PreviewCard"],
+  [class*="glass"], [class*="rounded-3xl"], [class*="rounded-2xl"] {
+    contain: layout paint style;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Ensure all image/media elements are isolated render layers */
+  img, svg, canvas, video {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  /* Fixed/sticky elements — force GPU layer creation + containment */
+  [class*="fixed"], [class*="sticky"] {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+    z-index: 50;
+  }
+}
+
+/* ─── Global compositing safety (all viewports) ──────────── */
+* {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+button, [role="button"], a[href] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS from inflating text on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ─── Prevent fixed/sticky element render corruption ───── */
+nav[class*="sticky"], nav[class*="fixed"],
+header[class*="sticky"], header[class*="fixed"] {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  z-index: 50;
+}
+
+/* ─── Inputs — prevent iOS zoom on focus ────────────────── */
+input, select, textarea {
+  font-size: 16px !important; /* prevents iOS auto-zoom on focus */
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+/* ─── Prevent text selection on UI chrome ───────────────── */
+button, nav, [role="navigation"],
+[class*="InstallButton"], [class*="AppBox"] h3 {
+  -webkit-user-select: none;
+  user-select: none;
 }

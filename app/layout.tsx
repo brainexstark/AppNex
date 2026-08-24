@@ -61,8 +61,12 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
+  // Cap max scale at 2 to prevent extreme accidental zoom that triggers
+  // "broken screen" layout on mobile; still allows accessibility zoom.
+  maximumScale: 2,
+  minimumScale: 1,
   userScalable: true,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

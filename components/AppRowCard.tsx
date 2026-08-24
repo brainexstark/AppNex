@@ -65,7 +65,7 @@ export default function AppRowCard({ app, rank, showRank = false }: AppRowCardPr
           src={app.icon}
           name={app.name}
           size={56}
-          className="shadow-md ring-1 ring-white/5 transition-transform group-hover:scale-105"
+          className="shadow-md ring-1 ring-white/5 transition-transform md:group-hover:scale-105 transform-gpu"
         />
       </Link>
 

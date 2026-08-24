@@ -56,26 +56,28 @@ const DEFAULT_ICONS: ManifestIcon[] = [
   { src: "/icons/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
 ];
 
+const ALL_SIZES = [
+  "36x36", "48x48", "72x72", "96x96", "128x128",
+  "144x144", "152x152", "192x192", "256x256", "384x384", "512x512",
+];
+
 function buildIcons(customIcon?: string): ManifestIcon[] {
   const hasCustom = !!(customIcon && customIcon.trim().startsWith("http"));
-  const icons: ManifestIcon[] = [];
 
-  if (hasCustom) {
-    icons.push({
-      src: customIcon!,
-      sizes: "192x192",
-      type: "image/png",
-      purpose: "any",
-    });
-    icons.push({
-      src: customIcon!,
-      sizes: "512x512",
-      type: "image/png",
-      purpose: "any maskable",
-    });
+  if (!hasCustom) {
+    return [...DEFAULT_ICONS];
   }
 
-  icons.push(...DEFAULT_ICONS);
+  const icons: ManifestIcon[] = [];
+  for (const size of ALL_SIZES) {
+    const isLargest = size === "512x512";
+    icons.push({
+      src: customIcon!,
+      sizes: size,
+      type: "image/png",
+      purpose: isLargest ? "any maskable" : "any",
+    });
+  }
   return icons;
 }
 
@@ -104,8 +106,16 @@ export function generateManifest(options: GenerateManifestOptions): PwaManifest 
   const safeName = truncate(name || "App", 45);
   const safeShortName = truncate(shortName || name || "App", 12);
 
-  const manifestScope = scope || (id ? `/app/${id}` : "/");
-  const manifestStartUrl = startUrl || url;
+  // MUST be same-origin for the browser to accept installability.
+  // If the caller provides a startUrl/scope that is NOT same-origin we clamp
+  // to the id-based AppNex path. External URLs break the PWA install prompt.
+  const isSameOrigin = (s: string | undefined) =>
+    !!s && (s.startsWith("/") || s.startsWith("./") || s.startsWith("../"));
+  const fallbackScope = id ? `/app/${id}` : "/";
+  const fallbackStartUrl = id ? `/app/${id}` : "/";
+
+  const manifestScope = isSameOrigin(scope) ? scope! : fallbackScope;
+  const manifestStartUrl = isSameOrigin(startUrl) ? startUrl! : fallbackStartUrl;
 
   const manifest: PwaManifest = {
     id: id ? `/app/${id}` : manifestScope,

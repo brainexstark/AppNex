@@ -10,6 +10,16 @@ type AppRow = {
   theme_color: string | null;
 };
 
+function deriveFaviconFromUrl(url: string): string | undefined {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    if (!hostname) return undefined;
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=256`;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,12 +42,21 @@ export async function GET(
 
   if (!app) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const resolvedIcon = app.icon?.startsWith("http")
+    ? app.icon
+    : deriveFaviconFromUrl(app.url);
+
   return generateManifestResponse({
     id,
     name: app.name ?? "App",
     description: app.description || undefined,
     url: app.url,
-    icon: app.icon?.startsWith("http") ? app.icon : undefined,
+    icon: resolvedIcon,
     themeColor: app.theme_color ?? "#3B82F6",
+    // Same-origin only — these satisfy browser PWA installability.
+    // When the user opens the installed shortcut, start_url loads /app/[id],
+    // and StandaloneRedirect on that page bounces them to the real app URL.
+    startUrl: `/app/${id}`,
+    scope: `/app/${id}`,
   });
 }

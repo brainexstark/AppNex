@@ -152,7 +152,8 @@ export default function PWAInstallBanner() {
               <button
                 onClick={handleInstall}
                 disabled={installing || !deferredPrompt}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 text-sm font-semibold text-white shadow-lg hover:shadow-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 py-2.5 text-sm font-semibold text-white shadow-lg md:hover:shadow-blue-500/30 transition-all md:hover:scale-[1.02] active:scale-[0.97] transform-gpu will-change-transform disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ contain: "layout paint style" }}
               >
                 {installing ? (
                   <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
