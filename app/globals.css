@@ -44,21 +44,12 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
-  /* Prevent iOS rubber-band overscroll glitches */
-  overscroll-behavior-y: none;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
   overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
-}
-
-/* Root-layer GPU isolation — prevents compositing crashes */
-body {
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  -webkit-perspective: 1000;
-  perspective: 1000;
 }
 
 @media (max-width: 767px) {
@@ -224,12 +215,6 @@ body {
     will-change: transform;
     z-index: 50;
   }
-}
-
-/* ─── Global compositing safety (all viewports) ──────────── */
-* {
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
 }
 
 button, [role="button"], a[href] {

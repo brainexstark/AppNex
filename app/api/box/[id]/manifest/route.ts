@@ -56,7 +56,7 @@ export async function GET(
     // Same-origin only — these satisfy browser PWA installability.
     // When the user opens the installed shortcut, start_url loads /app/[id],
     // and StandaloneRedirect on that page bounces them to the real app URL.
-    startUrl: `/app/${id}`,
+    startUrl: `/app/${id}?launch=box`,
     scope: `/app/${id}`,
   });
 }

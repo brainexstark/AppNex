@@ -18,6 +18,7 @@ interface Props {
 export default function StandaloneRedirect({ to }: Props) {
   useEffect(() => {
     if (typeof window === "undefined" || !to) return;
+    if (new URLSearchParams(window.location.search).get("launch") !== "box") return;
     let triggered = false;
 
     const redirect = () => {

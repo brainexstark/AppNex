@@ -177,20 +177,6 @@ export default function BoxInstallButton({ app }: Props) {
       return;
     }
 
-    // Already running as an installed standalone PWA (or WCO desktop PWA)
-    try {
-      if (
-        window.matchMedia &&
-        (window.matchMedia("(display-mode: standalone)").matches ||
-          window.matchMedia("(display-mode: window-controls-overlay)").matches)
-      ) {
-        setState("done");
-        return;
-      }
-    } catch {
-      /* ignore */
-    }
-
     // No service worker support
     if (!("serviceWorker" in navigator)) {
       setState("unsupported");
@@ -220,25 +206,7 @@ export default function BoxInstallButton({ app }: Props) {
       });
     };
 
-    const onAppInstalled = () => {
-      setState("done");
-      deferredPrompt.current = null;
-      try {
-        fetch("/api/install", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            app_id: app.id,
-            platform: /Android/.test(navigator.userAgent || "") ? "android" : "web",
-          }),
-        }).catch(() => {});
-      } catch {
-        /* ignore */
-      }
-    };
-
     window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onAppInstalled);
 
     // ── Register service worker ────────────────────────────
     navigator.serviceWorker
@@ -296,7 +264,6 @@ export default function BoxInstallButton({ app }: Props) {
       cancelled = true;
       clearTimers();
       window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onAppInstalled);
     };
   }, [app.id, clearTimers]);
 

@@ -35,6 +35,9 @@ export default function PWAInstallBanner() {
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
+    // Box pages have their own manifest and install prompt.
+    if (window.location.pathname.startsWith("/app/")) return;
+
     // Already installed as PWA — don't show
     if (isStandalone()) return;
 
@@ -60,12 +63,16 @@ export default function PWAInstallBanner() {
       return () => clearTimeout(timer);
     }
 
-    window.addEventListener("appinstalled", () => {
+    const handleInstalled = () => {
       setInstalled(true);
       setShow(false);
-    });
+    };
+    window.addEventListener("appinstalled", handleInstalled);
 
-    return () => window.removeEventListener("beforeinstallprompt", handlePrompt);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handlePrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   async function handleInstall() {
